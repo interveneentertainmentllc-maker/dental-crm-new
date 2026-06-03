@@ -732,3 +732,24 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
 </script>
 </body>
 </html>
+<!-- 1. Load the Supabase Client Library via CDN -->
+<script src="https://jsdelivr.net"></script>
+
+<script>
+  // 2. Initialize the Supabase Client
+  const supabaseUrl = 'https://supabase.co'
+  const supabaseKey = 'your-anon-public-key'
+  const supabase = supabase.createClient(supabaseUrl, supabaseKey)
+
+  // 3. Fetch data directly from your database
+  async function getData() {
+    const { data, error } = await supabase
+      .from('your_table_name')
+      .select('*')
+    
+    if (error) console.error('Error:', error)
+    else console.log('Data:', data)
+  }
+
+  getData()
+</script>
