@@ -563,7 +563,7 @@ function render(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v7";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
