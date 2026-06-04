@@ -557,6 +557,9 @@ function matchFilter(o){
 
 /* ---------- render ---------- */
 function render(){
+  // keep the filter chips' highlight in sync with the real filter state
+  // (a background sync re-render must never leave them disagreeing)
+  document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x.getAttribute('data-f')===state.filter));
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
@@ -1112,7 +1115,9 @@ function wire(){
   document.getElementById('sheetBg').onclick=hideSheet;
   let st;
   document.getElementById('search').addEventListener('input',e=>{clearTimeout(st);st=setTimeout(()=>{state.q=e.target.value.trim();render();},180);});
-  document.getElementById('filterbar').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();});
+  document.getElementById('filterbar').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();requestAnimationFrame(render);
+    try{const fc=DB.filter(matchFilter).length;toast("filter="+state.filter+" · matches="+fc+" · DB="+DB.length);}catch(_){}
+  });
   // autosave safety on hide/blur
   window.addEventListener('beforeunload',()=>save(true));
   window.addEventListener('pagehide',()=>save(true));
