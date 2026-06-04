@@ -527,21 +527,23 @@ async function decompressSeed(){
 function rebuild(){
   DB=[];
   const delSet=new Set(store.del);
+  const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes"];
+  const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });return o;};
   SEED.forEach((r,i)=>{
     if(delSet.has(i))return;
     const o={id:"s"+i,seed:true,name:r[0],addr:r[1],city:r[2],zip:r[3],lat:r[4],lng:r[5],county:r[6],
              phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visited:false};
     const ov=store.over[i];
     if(ov)Object.assign(o,ov);
-    DB.push(o);
+    DB.push(norm(o));
   });
-  store.add.forEach(a=>DB.push({...a,seed:false}));
+  store.add.forEach(a=>DB.push(norm({...a,seed:false})));
 }
 
 /* ---------- helpers ---------- */
 function officeById(id){return DB.find(o=>o.id===id);}
 function isVisited(o){return !!(o.visited||o.visitDay||o.notes||o.scanner&&o.scanner!=="None");}
-function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function toast(msg,undo){const t=document.getElementById('toast');t.innerHTML=esc(msg)+(undo?' <span class="undo" id="undoLink">Undo</span>':'');t.classList.add('show');if(undo){document.getElementById('undoLink').onclick=()=>{doUndo();t.classList.remove('show');};}clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),undo?5000:1800);}
 
 /* ---------- filtering ---------- */
@@ -551,8 +553,8 @@ function matchFilter(o){
   if(state.filter==="scanner"&&!(o.scanner&&o.scanner!=="None"&&o.scanner!==""))return false;
   if(state.filter==="notes"&&!o.notes)return false;
   if(state.filter==="custom"&&o.seed)return false;
-  if(state.q){const q=state.q.toLowerCase();
-    if(!((o.name||"").toLowerCase().includes(q)||(o.city||"").toLowerCase().includes(q)||(o.addr||"").toLowerCase().includes(q)||(o.drs||"").toLowerCase().includes(q)||(o.lab||"").toLowerCase().includes(q)||(o.zip||"").includes(q)))return false;}
+  if(state.q){const q=state.q.toLowerCase();const S=v=>(v==null?"":String(v)).toLowerCase();
+    if(!(S(o.name).includes(q)||S(o.city).includes(q)||S(o.addr).includes(q)||S(o.drs).includes(q)||S(o.lab).includes(q)||S(o.zip).includes(q)))return false;}
   return true;
 }
 
@@ -575,7 +577,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v9";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v10";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -599,7 +601,7 @@ function renderInner(){
 
   let html="";
   names.forEach(city=>{
-    const list=cities[city].sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    const list=cities[city].sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
     const open=forceOpen||state.openCity===city;
     html+=`<div class="cityrow${open?' open':''}" data-city="${esc(city)}">
       <button class="cityhdr" data-cityhdr="${esc(city)}">
