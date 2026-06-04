@@ -45,6 +45,10 @@ header{padding:calc(var(--safe-top) + 14px) 16px 10px;background:var(--teal-deep
 header .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 header h1{font-family:var(--display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;}
 header .sub{font-size:11px;color:#9fc7be;font-family:var(--mono);margin-top:2px;}
+.synclink{display:inline-flex;align-items:center;gap:5px;margin-top:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cfe7e1;font-size:10.5px;font-family:var(--mono);padding:3px 8px;border-radius:20px;cursor:pointer;}
+.synclink:active{background:rgba(255,255,255,.16);}
+.syncdot{width:7px;height:7px;border-radius:50%;background:#8a978f;display:inline-block;}
+.syncdot.on{background:#37d39b;box-shadow:0 0 0 2px rgba(55,211,155,.3);}
 .hbtns{display:flex;gap:6px;}
 .hbtn{background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;}
 .hbtn:active{background:rgba(255,255,255,.25);}
@@ -196,6 +200,9 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
     <div>
       <h1>IL Dental CRM</h1>
       <div class="sub" id="subline">loading…</div>
+      <button id="btnSync" class="synclink" aria-label="Team sync settings">
+        <span id="syncDot" class="syncdot"></span><span id="syncLabel">Team sync: off</span>
+      </button>
     </div>
     <div class="hbtns">
       <button class="hbtn" id="btnView" aria-label="Toggle map view">
@@ -253,6 +260,75 @@ const SEED_B64="H4sIAAFzIGoC/7y92XLcSJI2+iqwLrOaG6kNsQOXXLSVSBWPqCmd+X87F2AmyEQx
 const SK="ildental_v2";        // overrides+additions+deletions
 const SCANNERS=["iTero","Trios","Dscore","Medit","Allied Star","Other","None"];
 
+/* ---------- shared cloud sync (Google Sheets via Apps Script) ----------
+   Paste your Apps Script web-app URL in Settings ▸ Team Sync to turn on
+   shared, everyone-sees-the-same-data mode. Blank = local-only.
+   The whole team's store JSON lives in one cell of a Google Sheet, read
+   and written through the Apps Script web app. There is no realtime push,
+   so we poll every POLL_MS for teammates' changes.                        */
+const GS_CFG_KEY="ildental_gs";
+let GS_URL="";
+try{const c=JSON.parse(localStorage.getItem(GS_CFG_KEY)||"{}");GS_URL=c.url||"";}catch(e){}
+let cloudOn=false, lastSyncJSON="", pollTimer=null, pulling=false;
+const POLL_MS=15000;
+
+function cloudInit(){
+  cloudOn=!!GS_URL;
+}
+// Read shared store. Uses a GET with cache-buster; Apps Script returns the JSON doc.
+async function cloudPull(){
+  if(!cloudOn||pulling) return false;
+  pulling=true;
+  try{
+    const res=await fetch(GS_URL+(GS_URL.indexOf("?")<0?"?":"&")+"t="+Date.now(),{method:"GET"});
+    if(!res.ok) throw new Error("http "+res.status);
+    const text=await res.text();
+    const remote=text&&text.trim()?JSON.parse(text):null;
+    if(remote&&typeof remote==="object"&&remote.over){
+      const js=JSON.stringify(remote);
+      if(js!==lastSyncJSON){
+        store=remote;
+        if(!store.over)store.over={}; if(!store.add)store.add=[]; if(!store.del)store.del=[];
+        lastSyncJSON=js;
+        try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
+        pulling=false; return true;
+      }
+    } else {
+      // Sheet empty so far — seed it with whatever we have locally.
+      await cloudPush(true);
+    }
+  }catch(e){}
+  pulling=false; return false;
+}
+// Write shared store. text/plain avoids a CORS preflight against Apps Script.
+async function cloudPush(silent){
+  if(!cloudOn) return;
+  const js=JSON.stringify(store);
+  if(js===lastSyncJSON) return;
+  try{
+    const res=await fetch(GS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:js});
+    if(!res.ok) throw new Error("http "+res.status);
+    lastSyncJSON=js;
+    if(!silent) toast("Synced to team");
+  }catch(e){ if(!silent) toast("⚠️ Sync failed — saved on device"); }
+}
+// Poll for teammates' edits; if the doc changed remotely, adopt and re-render.
+function cloudSubscribe(){
+  if(!cloudOn||pollTimer) return;
+  pollTimer=setInterval(async ()=>{
+    if(document.hidden) return;
+    const changed=await cloudPull();
+    if(changed){ rebuild(); render(); toast("Updated by teammate"); }
+  },POLL_MS);
+}
+function cloudUnsubscribe(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+}
+function cloudSaveConfig(url){
+  GS_URL=(url||"").trim();
+  try{localStorage.setItem(GS_CFG_KEY,JSON.stringify({url:GS_URL}));}catch(e){}
+}
+
 let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list"};
 let mapObj=null, clusterLayer=null, mapBuilt=false;
 let userPos=null, userMarker=null, nearbyMode=false;
@@ -262,7 +338,7 @@ let undoStack=[];
 
 /* ---------- persistence ---------- */
 function load(){ try{const r=localStorage.getItem(SK); if(r)store=JSON.parse(r);}catch(e){} if(!store.over)store.over={}; if(!store.add)store.add=[]; if(!store.del)store.del=[]; }
-function save(silent){ try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){toast("⚠️ Save failed (storage full?)");return;} if(!silent)toast("Saved");}
+function save(silent){ try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){toast("⚠️ Save failed (storage full?)");return;} if(cloudOn){cloudPush(true);} if(!silent)toast(cloudOn?"Saved & syncing":"Saved");}
 function pushUndo(label){ undoStack.push({snap:JSON.stringify(store),label}); if(undoStack.length>40)undoStack.shift(); }
 function doUndo(){ if(!undoStack.length){toast("Nothing to undo");return;} const u=undoStack.pop(); store=JSON.parse(u.snap); save(true); rebuild(); render(); toast("Reverted: "+u.label); }
 
@@ -452,6 +528,12 @@ function drawUser(){
 }
 function locateMe(){
   if(!navigator.geolocation){ toast("Location not supported on this device"); return; }
+  // iOS Safari blocks geolocation on insecure origins (file:// or http://).
+  // window.isSecureContext is true for https:// and localhost.
+  if(window.isSecureContext===false){
+    toast("Open the https:// site to use location");
+    return;
+  }
   const btn=document.getElementById('locateBtn');
   btn.classList.add('locating');
   if(state.view!=="map") setView("map");
@@ -465,9 +547,12 @@ function locateMe(){
     toast(`Showing ${NEARBY_N} offices near you`);
   }, err=>{
     btn.classList.remove('locating');
-    const msg = err.code===1 ? "Location permission denied" : "Couldn't get your location";
+    let msg="Couldn't get your location";
+    if(err.code===1) msg="Location blocked — allow it in Settings ▸ Safari";
+    else if(err.code===2) msg="Location unavailable right now";
+    else if(err.code===3) msg="Location timed out — try again";
     toast(msg);
-  }, {enableHighAccuracy:true, timeout:10000, maximumAge:60000});
+  }, {enableHighAccuracy:true, timeout:20000, maximumAge:60000});
 }
 function updateNearbyLabel(){
   const lbl=document.getElementById('nearbyLabel');
@@ -682,7 +767,83 @@ function openExport(){
   showSheet();
 }
 
-/* ---------- sheet controls ---------- */
+function setSyncBadge(){
+  const dot=document.getElementById('syncDot'), lbl=document.getElementById('syncLabel');
+  if(!dot||!lbl) return;
+  if(cloudOn){ dot.classList.add('on'); lbl.textContent="Team sync: on"; }
+  else { dot.classList.remove('on'); lbl.textContent="Team sync: off"; }
+}
+function openSync(){
+  document.getElementById('sheetTitle').textContent="Team Sync";
+  const on=cloudOn;
+  // Apps Script source shown to the user — kept out of the template literal
+  // below (assembled by lines) so its braces/quotes don't fight the HTML.
+  const gsScript=[
+    'function doGet(){',
+    '  var v=PropertiesService.getScriptProperties().getProperty("doc")||"";',
+    '  return ContentService.createTextOutput(v).setMimeType(ContentService.MimeType.JSON);',
+    '}',
+    'function doPost(e){',
+    '  var body=(e&&e.postData&&e.postData.contents)||"";',
+    '  PropertiesService.getScriptProperties().setProperty("doc",body);',
+    '  try{',
+    '    var sh=SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];',
+    '    sh.getRange("A1").setValue(body);',
+    '  }catch(err){}',
+    '  return ContentService.createTextOutput("ok").setMimeType(ContentService.MimeType.TEXT);',
+    '}'
+  ].join("\n");
+  document.getElementById('sheetBody').innerHTML=`
+    <div style="font-size:13px;color:var(--ink-soft);line-height:1.55;margin-bottom:14px;">
+      Turn on shared mode so everyone with the link sees the same offices, notes and visits. Changes save to your Google Sheet and teammates' updates appear within about 15 seconds. Leave blank to keep data only on this device.
+    </div>
+    <div style="font-size:12px;color:var(--ink);font-weight:700;margin-bottom:4px;">Status</div>
+    <div style="font-size:13px;margin-bottom:14px;color:${on?'var(--green)':'var(--ink-faint)'};font-family:var(--mono);">
+      ${on?'● Connected — sharing with your team':'○ Off — local only on this device'}
+    </div>
+    <div class="fld"><label>Apps Script Web App URL</label>
+      <input id="sy_url" type="url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(GS_URL)}"></div>
+    <div class="actions" style="margin-top:2px;">
+      <button class="btn btn-ghost" id="sy_off">Turn off</button>
+      <button class="btn btn-primary" id="sy_save">Save &amp; connect</button>
+    </div>
+    <details style="margin-top:16px;">
+      <summary style="font-size:12.5px;color:var(--teal-deep);font-weight:700;cursor:pointer;">One-time setup (≈5 min)</summary>
+      <ol style="font-size:12px;color:var(--ink-soft);line-height:1.6;padding-left:18px;margin-top:8px;">
+        <li>Create a new Google Sheet (sheets.new). This is where the data lives.</li>
+        <li>In the Sheet, open <b>Extensions ▸ Apps Script</b>.</li>
+        <li>Delete any sample code, paste the script below, and click <b>Save</b>.</li>
+        <li>Click <b>Deploy ▸ New deployment</b>. Set type to <b>Web app</b>. Under "Who has access" choose <b>Anyone</b>. Click <b>Deploy</b> and authorize when prompted.</li>
+        <li>Copy the <b>Web app URL</b> it gives you (ends in <code>/exec</code>), paste it in the field above, then <b>Save &amp; connect</b>.</li>
+        <li>Share your GitHub Pages link with the team — everyone reads &amp; writes the same Sheet.</li>
+      </ol>
+      <div style="font-size:11px;color:var(--ink);font-weight:700;margin:8px 0 4px;">Apps Script to paste</div>
+      <textarea readonly id="sy_code" style="width:100%;min-height:150px;font-family:var(--mono);font-size:10.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px;line-height:1.45;white-space:pre;color:var(--ink);">${esc(gsScript)}</textarea>
+      <button class="btn btn-ghost" id="sy_copy" style="margin-top:8px;">Copy script</button>
+      <div style="font-size:11.5px;color:var(--amber);margin-top:8px;">Note: "Anyone" access means anyone with the link can read &amp; edit (what you asked for). The marketing team can also open the Sheet directly. For a private team, add a password layer later.</div>
+    </details>`;
+  document.getElementById('sy_copy').onclick=()=>{
+    const ta=document.getElementById('sy_code'); ta.select();
+    try{document.execCommand('copy');toast("Script copied");}catch(e){
+      try{navigator.clipboard.writeText(gsScript);toast("Script copied");}catch(_){toast("Select and copy manually");}
+    }
+  };
+  document.getElementById('sy_save').onclick=async()=>{
+    const u=document.getElementById('sy_url').value.trim();
+    if(!u){toast("Paste your Web App URL");return;}
+    if(!/^https:\/\/script\.google\.com\/.*\/exec/.test(u)){toast("That doesn't look like an /exec URL");return;}
+    cloudSaveConfig(u); cloudInit();
+    toast("Connecting…");
+    const pulled=await cloudPull(); cloudSubscribe();
+    rebuild(); render(); setSyncBadge(); hideSheet();
+    toast(pulled?"Connected — pulled team data":"Connected — sharing this device's data");
+  };
+  document.getElementById('sy_off').onclick=()=>{
+    cloudSaveConfig(""); cloudOn=false; cloudUnsubscribe();
+    setSyncBadge(); hideSheet(); toast("Team sync turned off");
+  };
+  showSheet();
+}
 function showSheet(){document.body.classList.add('sheet-open');document.getElementById('sheetBg').classList.add('show');document.getElementById('sheet').classList.add('show');}
 function hideSheet(){document.body.classList.remove('sheet-open');document.getElementById('sheetBg').classList.remove('show');document.getElementById('sheet').classList.remove('show');}
 
@@ -706,6 +867,7 @@ function wire(){
   });
   document.getElementById('btnAdd').onclick=()=>openForm(null);
   document.getElementById('btnExport').onclick=openExport;
+  document.getElementById('btnSync').onclick=openSync;
   document.getElementById('btnView').onclick=()=>setView(state.view==="map"?"list":"map");
   document.getElementById('locateBtn').onclick=locateMe;
   document.getElementById('nearbyBtn').onclick=toggleNearby;
@@ -725,31 +887,14 @@ function wire(){
 window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openForm;
 (async function init(){
   load();
+  cloudInit();
   try{ SEED=await decompressSeed(); }
   catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
+  if(cloudOn){ await cloudPull(); cloudSubscribe(); }
   rebuild(); wire(); render();
+  setSyncBadge();
+  if(cloudOn) toast("Team sync on");
 })();
 </script>
 </body>
 </html>
-<!-- 1. Load the Supabase Client Library via CDN -->
-<script src="https://jsdelivr.net"></script>
-
-<script>
-  // 2. Initialize the Supabase Client
-  const supabaseUrl = 'https://supabase.co'
-  const supabaseKey = 'your-anon-public-key'
-  const supabase = supabase.createClient(supabaseUrl, supabaseKey)
-
-  // 3. Fetch data directly from your database
-  async function getData() {
-    const { data, error } = await supabase
-      .from('your_table_name')
-      .select('*')
-    
-    if (error) console.error('Error:', error)
-    else console.log('Data:', data)
-  }
-
-  getData()
-</script>
