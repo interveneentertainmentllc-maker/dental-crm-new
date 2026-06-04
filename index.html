@@ -334,7 +334,11 @@ function rowsToStore(rows){
     const visited=String(r.visited||"").trim().toLowerCase();
     if(id[0]==="s"){
       const idx=parseInt(id.slice(1),10); if(isNaN(idx)) return;
-      if(visited==="deleted"||(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay)){ if(ns.del.indexOf(idx)<0)ns.del.push(idx); return; }
+      // ONLY an explicit DELETED marker removes a base office. A blank row is
+      // treated as "no override" and ignored — a partial/garbled Sheet read can
+      // never delete the base list this way. (This was the data-wipe bug.)
+      if(visited==="deleted"){ if(ns.del.indexOf(idx)<0)ns.del.push(idx); return; }
+      if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!(r.visits&&String(r.visits).trim())) return;
       ns.over[idx]={name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
         visitDay:r.visitDay||"",visited:(visited==="yes"||visited==="true"||visited==="1"),notes:r.notes||"",visits:r.visits||""};
@@ -371,17 +375,25 @@ async function cloudPull(){
       const ns=rowsToStore(objs);
       const js=JSON.stringify(ns);
       lastSyncAt=Date.now();
-      // Guard: never let a pull WIPE local data. If the Sheet comes back with
-      // fewer offices than we currently hold AND we have unpushed local work,
-      // treat it as a stale/partial read and re-push instead of adopting it.
-      const localCount=(Object.keys(store.over||{}).length)+((store.add||[]).length);
-      const remoteCount=(Object.keys(ns.over||{}).length)+((ns.add||[]).length);
-      const wouldShrink = remoteCount < localCount;
+      // Compute the VISIBLE office count each store would produce: base SEED list
+      // minus explicit deletions, plus custom adds. The base list is the source
+      // of truth and must never shrink because of a bad/partial Sheet read.
+      const seedN=SEED.length;
+      // FAIL-SAFE: if the base list isn't loaded yet, we cannot validate anything —
+      // never adopt a pull in that window (it could clear the list blind).
+      if(seedN===0){
+        emptySheet=false;
+      } else {
+      const curVisible = seedN - (store.del||[]).length + (store.add||[]).length;
+      const newVisible = seedN - (ns.del||[]).length + (ns.add||[]).length;
       const localUnsynced = JSON.stringify(store)!==lastSyncJSON;
-      // Refuse if: (a) the Sheet shrank while we have unpushed local work, OR
-      // (b) the Sheet came back EMPTY while we still hold offices locally
-      // (a slow/partial Apps Script write reading back blank). Either way, re-push ours.
-      const refuse = (wouldShrink && localUnsynced) || (remoteCount===0 && localCount>0);
+      // Refuse to adopt if it would DROP the visible count (data loss) unless this
+      // device's own state is already in sync (meaning the change came from a
+      // teammate's legitimate edit, not a partial read). Also hard-refuse any pull
+      // that carries a mass deletion (>5% of base) — that is never a real edit.
+      const massDelete = (ns.del||[]).length > Math.max(25, seedN*0.05);
+      const wouldLose = newVisible < curVisible;
+      const refuse = massDelete || (wouldLose && localUnsynced);
       if(refuse){
         emptySheet=false;
         setTimeout(()=>{ try{cloudPush(true);}catch(e){} },0);
@@ -389,6 +401,7 @@ async function cloudPull(){
         store=ns; lastSyncJSON=JSON.stringify(store);
         try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
         changed=true;
+      }
       }
     } else {
       emptySheet=true;   // no data rows yet
@@ -658,7 +671,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v14";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v16";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1159,6 +1172,8 @@ function openSync(){
       <button class="btn btn-primary" id="sy_save">Save &amp; connect</button>
     </div>
     ${on?`<button class="btn btn-ghost" id="sy_now" style="width:100%;margin-top:9px;">↻ Sync now</button>`:``}
+    <button class="btn btn-ghost" id="sy_restore" style="width:100%;margin-top:9px;">⟳ Restore full office list</button>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;line-height:1.5;">Brings back all ${SEED.length.toLocaleString()} base offices if the list ever looks empty. Your added offices and notes are kept.</div>
     <details style="margin-top:16px;">
       <summary style="font-size:12.5px;color:var(--teal-deep);font-weight:700;cursor:pointer;">One-time setup (≈5 min)</summary>
       <ol style="font-size:12px;color:var(--ink-soft);line-height:1.6;padding-left:18px;margin-top:8px;">
@@ -1192,7 +1207,15 @@ function openSync(){
     rebuild(); render(); setSyncBadge(); hideSheet();
     toast(pulled?"Connected — pulled team data":"Connected — sharing this device's data");
   };
-  const nowBtn=document.getElementById('sy_now');
+  const restoreBtn=document.getElementById('sy_restore');
+  if(restoreBtn) restoreBtn.onclick=async()=>{
+    if(!confirm("Restore all "+SEED.length.toLocaleString()+" base offices? Your added offices and notes are kept; this just un-hides any that went missing.")) return;
+    store.del=[];                       // un-hide every base office
+    save(true); rebuild(); render();
+    if(cloudOn){ try{ pulling=false; pushing=false; await cloudPush(true); }catch(e){} setSyncBadge(); }
+    hideSheet();
+    toast("Restored "+DB.length.toLocaleString()+" offices");
+  };
   if(nowBtn) nowBtn.onclick=async()=>{
     pulling=false; pushing=false;            // clear any stuck locks
     cloudInit(); cloudUnsubscribe();
@@ -1263,15 +1286,20 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
   load();
   cloudInit();
   setSyncBadge();                 // reflect saved sync state immediately
-  // Kick off cloud sync in parallel — it must not wait on (or be blocked by)
-  // seed decompression. Pull, heal, then start the poll + watchdog.
-  if(cloudOn){
-    (async()=>{ try{ await cloudPull(); await cloudHeal(); }catch(e){} cloudSubscribe(); rebuild(); render(); setSyncBadge(); })();
-  }
+
+  // STEP 1: Always build the base list FIRST. The 5,292 offices live in the file,
+  // not the cloud, so they must exist before any sync runs — otherwise a pull
+  // could operate against an empty base and the anti-wipe guard would be blind.
   try{ SEED=await decompressSeed(); }
   catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
   rebuild(); wire(); render();
   setSyncBadge();
+
+  // STEP 2: Now that the base list is up, start cloud sync. It can only ADD or
+  // OVERLAY — never wipe the base list (guarded in cloudPull).
+  if(cloudOn){
+    (async()=>{ try{ await cloudPull(); await cloudHeal(); }catch(e){} cloudSubscribe(); rebuild(); render(); setSyncBadge(); })();
+  }
 })();
 </script>
 </body>
