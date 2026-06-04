@@ -371,8 +371,22 @@ async function cloudPull(){
       const ns=rowsToStore(objs);
       const js=JSON.stringify(ns);
       lastSyncAt=Date.now();
-      if(js!==lastSyncJSON){
-        store=ns; lastSyncJSON=js;
+      // Guard: never let a pull WIPE local data. If the Sheet comes back with
+      // fewer offices than we currently hold AND we have unpushed local work,
+      // treat it as a stale/partial read and re-push instead of adopting it.
+      const localCount=(Object.keys(store.over||{}).length)+((store.add||[]).length);
+      const remoteCount=(Object.keys(ns.over||{}).length)+((ns.add||[]).length);
+      const wouldShrink = remoteCount < localCount;
+      const localUnsynced = JSON.stringify(store)!==lastSyncJSON;
+      // Refuse if: (a) the Sheet shrank while we have unpushed local work, OR
+      // (b) the Sheet came back EMPTY while we still hold offices locally
+      // (a slow/partial Apps Script write reading back blank). Either way, re-push ours.
+      const refuse = (wouldShrink && localUnsynced) || (remoteCount===0 && localCount>0);
+      if(refuse){
+        emptySheet=false;
+        setTimeout(()=>{ try{cloudPush(true);}catch(e){} },0);
+      } else if(js!==lastSyncJSON){
+        store=ns; lastSyncJSON=JSON.stringify(store);
         try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
         changed=true;
       }
@@ -389,8 +403,11 @@ async function cloudPush(silent){
   if(!cloudOn||pushing) return;
   const rows=storeToRows();
   const payload={cols:SHEET_COLS,rows:rows.map(r=>SHEET_COLS.map(c=>r[c]==null?"":r[c]))};
-  const js=JSON.stringify(rowsToStore(rows.map(r=>{const o={};SHEET_COLS.forEach(c=>o[c]=r[c]);return o;})));
-  if(js===lastSyncJSON) return;
+  // Fingerprint our own local state directly. Comparing the SAME shape we store
+  // locally (not a re-parsed copy) is what lets an incoming poll tell "this is
+  // mine" from "a teammate changed it". Re-round-tripping here was the bug that
+  // let a fresh save get clobbered back to empty.
+  const js=JSON.stringify(store);
   pushing=true;
   const prev=lastSyncJSON;
   lastSyncJSON=js;          // mark as ours up-front so an in-flight poll won't treat it as a foreign change
@@ -641,7 +658,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v12";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v13";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
