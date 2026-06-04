@@ -411,26 +411,60 @@ async function cloudPull(){
   if(emptySheet){ await cloudPush(true); }   // seed from local, outside the lock
   return changed;
 }
-// Write all touched offices to the Sheet as rows. text/plain avoids CORS preflight.
+// Write to the Sheet by MERGING: read what's there, union it with our local
+// diffs (ours wins on the same id), then write the union. A push can therefore
+// never erase a teammate's edits — which was the real "wipe".
 async function cloudPush(silent){
   if(!cloudOn||pushing) return;
-  const rows=storeToRows();
-  const payload={cols:SHEET_COLS,rows:rows.map(r=>SHEET_COLS.map(c=>r[c]==null?"":r[c]))};
-  // Fingerprint our own local state directly. Comparing the SAME shape we store
-  // locally (not a re-parsed copy) is what lets an incoming poll tell "this is
-  // mine" from "a teammate changed it". Re-round-tripping here was the bug that
-  // let a fresh save get clobbered back to empty.
-  const js=JSON.stringify(store);
   pushing=true;
-  const prev=lastSyncJSON;
-  lastSyncJSON=js;          // mark as ours up-front so an in-flight poll won't treat it as a foreign change
+  const prevSync=lastSyncJSON;
   try{
+    // 1. Read the current Sheet so we don't clobber anyone.
+    let remoteStore={over:{},add:[],del:[]};
+    try{
+      const res=await fetch(GS_URL+(GS_URL.indexOf("?")<0?"?":"&")+"t="+Date.now(),{method:"GET"});
+      if(res.ok){
+        const text=await res.text();
+        const doc=text&&text.trim()?JSON.parse(text):null;
+        if(doc&&doc.cols&&Array.isArray(doc.rows)){
+          const cols=doc.cols.map(c=>String(c).trim());
+          const objs=doc.rows.map(arr=>{const o={};cols.forEach((c,i)=>o[c]=arr[i]==null?"":arr[i]);return o;});
+          remoteStore=rowsToStore(objs);
+        }
+      }
+    }catch(e){ /* if read fails, fall back to writing our own (still safe: we never delete base offices) */ }
+
+    // 2. MERGE remote + local. Local wins for the same key (most recent editor on
+    //    this device), but every remote edit/add we don't touch is preserved.
+    const merged={over:Object.assign({},remoteStore.over,store.over),
+                  add:[],
+                  del:Array.from(new Set([].concat(remoteStore.del||[],store.del||[])))};
+    // merge adds by id, local taking precedence, then de-dupe by name+addr+city
+    const addById={}; (remoteStore.add||[]).forEach(a=>{if(a.id)addById[a.id]=a;});
+    (store.add||[]).forEach(a=>{if(a.id)addById[a.id]=a;});
+    const seenKey={};
+    Object.keys(addById).forEach(id=>{
+      const a=addById[id];
+      const key=((a.name||"")+"|"+(a.addr||"")+"|"+(a.city||"")).toLowerCase().replace(/\s+/g," ").trim();
+      if(key!=="||"&&seenKey[key]) return; if(key!=="||")seenKey[key]=1;
+      merged.add.push(a);
+    });
+    // a base office that's been re-edited shouldn't also remain "deleted"
+    merged.del=merged.del.filter(idx=>!merged.over[idx]);
+
+    // 3. Adopt the merge locally and write it as the new Sheet truth.
+    store=merged;
+    try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
+    const rows=storeToRows();
+    const payload={cols:SHEET_COLS,rows:rows.map(r=>SHEET_COLS.map(c=>r[c]==null?"":r[c]))};
+    lastSyncJSON=JSON.stringify(store);   // mark as ours so the next poll won't re-trigger
     const res=await fetch(GS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     if(!res.ok) throw new Error("http "+res.status);
     lastSyncAt=Date.now();
+    rebuild();
     if(!silent) toast("Synced to team");
-  }catch(e){ lastSyncJSON=prev; if(!silent) toast("⚠️ Sync failed — saved on device"); }
-  finally{ pushing=false; }   // ALWAYS release the lock, even on error
+  }catch(e){ lastSyncJSON=prevSync; if(!silent) toast("⚠️ Sync failed — saved on device"); }
+  finally{ pushing=false; }
 }
 // Poll for teammates' (or hand-) edits; adopt and re-render on change.
 function cloudSubscribe(){
@@ -467,13 +501,12 @@ function cloudUnsubscribe(){
 // If the Sheet contained more rows than the deduped store needs, the Sheet has
 // duplicates — rewrite it once with the clean set so it self-heals.
 async function cloudHeal(){
-  if(!cloudOn) return;
-  const cleanRows=storeToRows().length;
-  if(lastRawRows>cleanRows){
-    lastSyncJSON="";          // force the push through
-    await cloudPush(true);
-    toast("Cleaned up "+(lastRawRows-cleanRows)+" duplicate row"+((lastRawRows-cleanRows)===1?"":"s"));
-  }
+  // DISABLED. This used to compare Sheet row count vs local diff count and
+  // force-overwrite the Sheet — but because the Sheet stores only diffs (not the
+  // 5,292 base offices), that comparison was meaningless and would push a small
+  // local store over everyone else's edits, presenting as a "wipe". Dedup of
+  // rows is handled safely on read in rowsToStore(). Intentionally a no-op.
+  return;
 }
 function cloudSaveConfig(url){
   GS_URL=(url||"").trim();
@@ -671,7 +704,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v16";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v17";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
