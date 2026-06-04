@@ -274,11 +274,12 @@ const SCANNERS=["iTero","Trios","Dscore","Medit","Allied Star","Other","None"];
 const GS_CFG_KEY="ildental_gs";
 let GS_URL="";
 try{const c=JSON.parse(localStorage.getItem(GS_CFG_KEY)||"{}");GS_URL=c.url||"";}catch(e){}
-let cloudOn=false, lastSyncJSON="", pollTimer=null, pulling=false, pushing=false, lastRawRows=0;
+let cloudOn=false, lastSyncJSON="", pollTimer=null, pulling=false, pushing=false, lastRawRows=0, lastSyncAt=0, watchdog=null;
 const POLL_MS=15000;
 
 function cloudInit(){
   cloudOn=!!GS_URL;
+  try{setSyncBadge();}catch(e){}
 }
 
 /* Row-per-office Sheet format. The Sheet holds ONE ROW per office the team
@@ -353,6 +354,7 @@ async function cloudPull(){
       lastRawRows=objs.length;
       const ns=rowsToStore(objs);
       const js=JSON.stringify(ns);
+      lastSyncAt=Date.now();
       if(js!==lastSyncJSON){
         store=ns; lastSyncJSON=js;
         try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
@@ -379,23 +381,42 @@ async function cloudPush(silent){
   try{
     const res=await fetch(GS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     if(!res.ok) throw new Error("http "+res.status);
+    lastSyncAt=Date.now();
     if(!silent) toast("Synced to team");
   }catch(e){ lastSyncJSON=prev; if(!silent) toast("⚠️ Sync failed — saved on device"); }
   finally{ pushing=false; }   // ALWAYS release the lock, even on error
 }
 // Poll for teammates' (or hand-) edits; adopt and re-render on change.
 function cloudSubscribe(){
-  if(!cloudOn||pollTimer) return;
-  pollTimer=setInterval(async ()=>{
-    if(document.hidden||pushing||pulling) return;
-    try{
-      const changed=await cloudPull();
-      if(changed){ rebuild(); render(); toast("Updated from the Sheet"); }
-    }catch(e){}
-  },POLL_MS);
+  if(!cloudOn) return;
+  if(!pollTimer){
+    pollTimer=setInterval(async ()=>{
+      if(document.hidden||pushing||pulling) return;
+      try{
+        const changed=await cloudPull();
+        if(changed){ rebuild(); render(); toast("Updated from the Sheet"); }
+      }catch(e){}
+      setSyncBadge();
+    },POLL_MS);
+  }
+  // Watchdog: if the poll ever dies (network blip, suspended timer) or hasn't
+  // synced in a while, clear stuck locks and bring it back — no user action.
+  if(!watchdog){
+    watchdog=setInterval(async ()=>{
+      if(!cloudOn||document.hidden) return;
+      const stale=lastSyncAt && (Date.now()-lastSyncAt > POLL_MS*3);
+      if(!pollTimer || stale){
+        pulling=false; pushing=false;
+        if(!pollTimer) cloudSubscribe();
+        try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
+        setSyncBadge();
+      }
+    },POLL_MS*2);
+  }
 }
 function cloudUnsubscribe(){
   if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+  if(watchdog){clearInterval(watchdog);watchdog=null;}
 }
 // If the Sheet contained more rows than the deduped store needs, the Sheet has
 // duplicates — rewrite it once with the clean set so it self-heals.
@@ -422,7 +443,7 @@ let undoStack=[];
 
 /* ---------- persistence ---------- */
 function load(){ try{const r=localStorage.getItem(SK); if(r)store=JSON.parse(r);}catch(e){} if(!store.over)store.over={}; if(!store.add)store.add=[]; if(!store.del)store.del=[]; }
-function save(silent){ try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){toast("⚠️ Save failed (storage full?)");return;} if(cloudOn){cloudPush(true);} if(!silent)toast(cloudOn?"Saved & syncing":"Saved");}
+function save(silent){ try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){toast("⚠️ Save failed (storage full?)");return;} if(cloudOn){cloudPush(true).then(()=>{try{setSyncBadge();}catch(e){}});} if(!silent)toast(cloudOn?"Saved & syncing":"Saved");}
 function pushUndo(label){ undoStack.push({snap:JSON.stringify(store),label}); if(undoStack.length>40)undoStack.shift(); }
 function doUndo(){ if(!undoStack.length){toast("Nothing to undo");return;} const u=undoStack.pop(); store=JSON.parse(u.snap); save(true); rebuild(); render(); toast("Reverted: "+u.label); }
 
@@ -886,7 +907,17 @@ function openExport(){
 function setSyncBadge(){
   const dot=document.getElementById('syncDot'), lbl=document.getElementById('syncLabel');
   if(!dot||!lbl) return;
-  if(cloudOn){ dot.classList.add('on'); lbl.textContent="Team sync: on"; }
+  if(cloudOn){
+    dot.classList.add('on');
+    let ago="";
+    if(lastSyncAt){
+      const s=Math.round((Date.now()-lastSyncAt)/1000);
+      ago = s<5?" · just now" : s<60?(" · "+s+"s ago") : (" · "+Math.round(s/60)+"m ago");
+      lbl.textContent="Team sync: on"+ago;
+    } else {
+      lbl.textContent="Team sync: connecting…";
+    }
+  }
   else { dot.classList.remove('on'); lbl.textContent="Team sync: off"; }
 }
 function openSync(){
@@ -1038,12 +1069,16 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
 (async function init(){
   load();
   cloudInit();
+  setSyncBadge();                 // reflect saved sync state immediately
+  // Kick off cloud sync in parallel — it must not wait on (or be blocked by)
+  // seed decompression. Pull, heal, then start the poll + watchdog.
+  if(cloudOn){
+    (async()=>{ try{ await cloudPull(); await cloudHeal(); }catch(e){} cloudSubscribe(); rebuild(); render(); setSyncBadge(); })();
+  }
   try{ SEED=await decompressSeed(); }
   catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
-  if(cloudOn){ await cloudPull(); await cloudHeal(); cloudSubscribe(); }
   rebuild(); wire(); render();
   setSyncBadge();
-  if(cloudOn){ toast("Team sync on"); }
 })();
 </script>
 </body>
