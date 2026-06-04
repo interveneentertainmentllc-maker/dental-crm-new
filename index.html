@@ -375,40 +375,21 @@ async function cloudPull(){
       const ns=rowsToStore(objs);
       const js=JSON.stringify(ns);
       lastSyncAt=Date.now();
-      // Compute the VISIBLE office count each store would produce: base SEED list
-      // minus explicit deletions, plus custom adds. The base list is the source
-      // of truth and must never shrink because of a bad/partial Sheet read.
+      // The SHEET is the source of truth for shared data. A pull simply adopts
+      // what the Sheet says (merged on top of the base SEED list in rebuild()).
+      // We do NOT auto-push back — the app only writes when YOU add/edit/delete
+      // in the app. This is what makes hand-edits in the spreadsheet safe.
       const seedN=SEED.length;
-      // FAIL-SAFE: if the base list isn't loaded yet, we cannot validate anything —
-      // never adopt a pull in that window (it could clear the list blind).
-      if(seedN===0){
-        emptySheet=false;
-      } else {
-      const curVisible = seedN - (store.del||[]).length + (store.add||[]).length;
-      const newVisible = seedN - (ns.del||[]).length + (ns.add||[]).length;
-      const localUnsynced = JSON.stringify(store)!==lastSyncJSON;
-      // Refuse to adopt if it would DROP the visible count (data loss) unless this
-      // device's own state is already in sync (meaning the change came from a
-      // teammate's legitimate edit, not a partial read). Also hard-refuse any pull
-      // that carries a mass deletion (>5% of base) — that is never a real edit.
-      const massDelete = (ns.del||[]).length > Math.max(25, seedN*0.05);
-      const wouldLose = newVisible < curVisible;
-      const refuse = massDelete || (wouldLose && localUnsynced);
-      if(refuse){
-        emptySheet=false;
-        setTimeout(()=>{ try{cloudPush(true);}catch(e){} },0);
-      } else if(js!==lastSyncJSON){
+      if(seedN>0 && js!==lastSyncJSON){
         store=ns; lastSyncJSON=JSON.stringify(store);
         try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
         changed=true;
       }
-      }
     } else {
-      emptySheet=true;   // no data rows yet
+      emptySheet=true;   // no data rows yet — do NOT auto-seed; wait for a real edit
     }
   }catch(e){}
   finally{ pulling=false; }   // ALWAYS release the lock, even on error
-  if(emptySheet){ await cloudPush(true); }   // seed from local, outside the lock
   return changed;
 }
 // Write to the Sheet by MERGING: read what's there, union it with our local
@@ -704,7 +685,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v17";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v18";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1185,8 +1166,38 @@ function openSync(){
     '  var doc=JSON.parse(body); var rows=doc.rows||[];',
     '  var sh=sheet_(); ensureHeader_(sh);',
     '  var last=sh.getLastRow();',
-    '  if(last>1){ sh.getRange(2,1,last-1,COLS.length).clearContent(); }',
-    '  if(rows.length){ sh.getRange(2,1,rows.length,COLS.length).setValues(rows); }',
+    '  // Build a map of existing rows by id (column A). We UPSERT: update a row if',
+    '  // its id already exists, append if new. We NEVER clear rows we were not told',
+    '  // about — so hand edits in the Sheet are safe and the app cannot wipe data.',
+    '  var existing={}; var order=[];',
+    '  if(last>1){',
+    '    var cur=sh.getRange(2,1,last-1,COLS.length).getValues();',
+    '    for(var i=0;i<cur.length;i++){ var id=String(cur[i][0]).trim(); if(id){ existing[id]={row:i+2,data:cur[i]}; order.push(id); } }',
+    '  }',
+    '  var appends=[];',
+    '  for(var j=0;j<rows.length;j++){',
+    '    var r=rows[j]; var rid=String(r[0]).trim(); if(!rid) continue;',
+    '    var visitedCol=r[COLS.indexOf("visited")];',
+    '    var isDel=String(visitedCol).trim().toLowerCase()==="deleted";',
+    '    if(existing[rid]){',
+    '      if(isDel){ sh.deleteRow(existing[rid].row); /* rebuild map after delete */ return reindexAndAppend_(sh,rows,j+1,appends); }',
+    '      sh.getRange(existing[rid].row,1,1,COLS.length).setValues([r]);',
+    '    } else if(!isDel){ appends.push(r); }',
+    '  }',
+    '  if(appends.length){ sh.getRange(sh.getLastRow()+1,1,appends.length,COLS.length).setValues(appends); }',
+    '  return ContentService.createTextOutput("ok").setMimeType(ContentService.MimeType.TEXT);',
+    '}',
+    'function reindexAndAppend_(sh,rows,fromIdx,appends){',
+    '  // After a deleteRow shifts indices, finish the remaining rows the simple way.',
+    '  var last=sh.getLastRow(); var existing={};',
+    '  if(last>1){ var cur=sh.getRange(2,1,last-1,COLS.length).getValues(); for(var i=0;i<cur.length;i++){var id=String(cur[i][0]).trim(); if(id)existing[id]=i+2;} }',
+    '  for(var j=fromIdx;j<rows.length;j++){',
+    '    var r=rows[j]; var rid=String(r[0]).trim(); if(!rid) continue;',
+    '    var isDel=String(r[COLS.indexOf("visited")]).trim().toLowerCase()==="deleted";',
+    '    if(existing[rid]){ if(isDel){ sh.deleteRow(existing[rid]); return reindexAndAppend_(sh,rows,j+1,appends); } sh.getRange(existing[rid],1,1,COLS.length).setValues([r]); }',
+    '    else if(!isDel){ appends.push(r); }',
+    '  }',
+    '  if(appends.length){ sh.getRange(sh.getLastRow()+1,1,appends.length,COLS.length).setValues(appends); }',
     '  return ContentService.createTextOutput("ok").setMimeType(ContentService.MimeType.TEXT);',
     '}'
   ].join("\n");
