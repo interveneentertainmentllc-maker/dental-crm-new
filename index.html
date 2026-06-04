@@ -274,7 +274,7 @@ const SCANNERS=["iTero","Trios","Dscore","Medit","Allied Star","Other","None"];
 const GS_CFG_KEY="ildental_gs";
 let GS_URL="";
 try{const c=JSON.parse(localStorage.getItem(GS_CFG_KEY)||"{}");GS_URL=c.url||"";}catch(e){}
-let cloudOn=false, lastSyncJSON="", pollTimer=null, pulling=false;
+let cloudOn=false, lastSyncJSON="", pollTimer=null, pulling=false, pushing=false, lastRawRows=0;
 const POLL_MS=15000;
 
 function cloudInit(){
@@ -311,17 +311,24 @@ function storeToRows(){
 // Rebuild the store object from rows read out of the Sheet.
 function rowsToStore(rows){
   const ns={over:{},add:[],del:[]};
+  const seenAddId={}, seenAddKey={};
   (rows||[]).forEach(r=>{
     const id=(r.id||"").trim(); if(!id) return;
     const visited=String(r.visited||"").trim().toLowerCase();
     if(id[0]==="s"){
       const idx=parseInt(id.slice(1),10); if(isNaN(idx)) return;
-      if(visited==="deleted"||(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay)){ ns.del.push(idx); return; }
+      if(visited==="deleted"||(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay)){ if(ns.del.indexOf(idx)<0)ns.del.push(idx); return; }
       ns.over[idx]={name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
         visitDay:r.visitDay||"",visited:(visited==="yes"||visited==="true"||visited==="1"),notes:r.notes||""};
     } else {
       if(visited==="deleted") return; // a deleted custom office just disappears
+      // De-duplicate added offices: skip if we've already taken this id,
+      // or another row with the same name+address+city (case-insensitive).
+      if(seenAddId[id]) return;
+      const key=((r.name||"")+"|"+(r.addr||"")+"|"+(r.city||"")).toLowerCase().replace(/\s+/g," ").trim();
+      if(key!=="||"&&seenAddKey[key]) return;
+      seenAddId[id]=1; if(key!=="||")seenAddKey[key]=1;
       ns.add.push({id,name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
         visitDay:r.visitDay||"",visited:(visited==="yes"||visited==="true"||visited==="1"),notes:r.notes||"",seed:false});
@@ -332,56 +339,74 @@ function rowsToStore(rows){
 
 // Read the Sheet (Apps Script returns {cols:[...], rows:[[...]]}) and adopt it.
 async function cloudPull(){
-  if(!cloudOn||pulling) return false;
+  if(!cloudOn||pulling||pushing) return false;   // never read while a write is in flight
   pulling=true;
+  let changed=false, emptySheet=false;
   try{
     const res=await fetch(GS_URL+(GS_URL.indexOf("?")<0?"?":"&")+"t="+Date.now(),{method:"GET"});
     if(!res.ok) throw new Error("http "+res.status);
     const text=await res.text();
     const doc=text&&text.trim()?JSON.parse(text):null;
     if(doc&&doc.cols&&Array.isArray(doc.rows)){
-      // map each row array → object keyed by the Sheet's own header order
       const cols=doc.cols.map(c=>String(c).trim());
       const objs=doc.rows.map(arr=>{const o={};cols.forEach((c,i)=>o[c]=arr[i]==null?"":arr[i]);return o;});
+      lastRawRows=objs.length;
       const ns=rowsToStore(objs);
       const js=JSON.stringify(ns);
       if(js!==lastSyncJSON){
         store=ns; lastSyncJSON=js;
         try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
-        pulling=false; return true;
+        changed=true;
       }
     } else {
-      // Sheet has no data rows yet — seed it from whatever is local.
-      await cloudPush(true);
+      emptySheet=true;   // no data rows yet
     }
   }catch(e){}
-  pulling=false; return false;
+  finally{ pulling=false; }   // ALWAYS release the lock, even on error
+  if(emptySheet){ await cloudPush(true); }   // seed from local, outside the lock
+  return changed;
 }
 // Write all touched offices to the Sheet as rows. text/plain avoids CORS preflight.
 async function cloudPush(silent){
-  if(!cloudOn) return;
+  if(!cloudOn||pushing) return;
   const rows=storeToRows();
   const payload={cols:SHEET_COLS,rows:rows.map(r=>SHEET_COLS.map(c=>r[c]==null?"":r[c]))};
   const js=JSON.stringify(rowsToStore(rows.map(r=>{const o={};SHEET_COLS.forEach(c=>o[c]=r[c]);return o;})));
   if(js===lastSyncJSON) return;
+  pushing=true;
+  const prev=lastSyncJSON;
+  lastSyncJSON=js;          // mark as ours up-front so an in-flight poll won't treat it as a foreign change
   try{
     const res=await fetch(GS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     if(!res.ok) throw new Error("http "+res.status);
-    lastSyncJSON=js;
     if(!silent) toast("Synced to team");
-  }catch(e){ if(!silent) toast("⚠️ Sync failed — saved on device"); }
+  }catch(e){ lastSyncJSON=prev; if(!silent) toast("⚠️ Sync failed — saved on device"); }
+  finally{ pushing=false; }   // ALWAYS release the lock, even on error
 }
 // Poll for teammates' (or hand-) edits; adopt and re-render on change.
 function cloudSubscribe(){
   if(!cloudOn||pollTimer) return;
   pollTimer=setInterval(async ()=>{
-    if(document.hidden) return;
-    const changed=await cloudPull();
-    if(changed){ rebuild(); render(); toast("Updated from the Sheet"); }
+    if(document.hidden||pushing||pulling) return;
+    try{
+      const changed=await cloudPull();
+      if(changed){ rebuild(); render(); toast("Updated from the Sheet"); }
+    }catch(e){}
   },POLL_MS);
 }
 function cloudUnsubscribe(){
   if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+}
+// If the Sheet contained more rows than the deduped store needs, the Sheet has
+// duplicates — rewrite it once with the clean set so it self-heals.
+async function cloudHeal(){
+  if(!cloudOn) return;
+  const cleanRows=storeToRows().length;
+  if(lastRawRows>cleanRows){
+    lastSyncJSON="";          // force the push through
+    await cloudPush(true);
+    toast("Cleaned up "+(lastRawRows-cleanRows)+" duplicate row"+((lastRawRows-cleanRows)===1?"":"s"));
+  }
 }
 function cloudSaveConfig(url){
   GS_URL=(url||"").trim();
@@ -741,7 +766,7 @@ function openForm(id){
     }, {enableHighAccuracy:true, timeout:20000, maximumAge:0});
   };
   document.getElementById('f_cancel').onclick=()=>{ if(id)openDetail(id); else hideSheet(); };
-  document.getElementById('f_save').onclick=()=>saveForm(id,()=>scan);
+  document.getElementById('f_save').onclick=function(){ this.disabled=true; saveForm(id,()=>scan); };
   showSheet();
 }
 
@@ -756,7 +781,7 @@ function saveForm(id,getScan){
     drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes')};
   pushUndo(id?"edit "+name:"add "+name);
   if(!id){
-    data.id="c"+Date.now().toString(36)+Math.floor(Math.random()*999);
+    data.id="c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
     data.visited=true;
     store.add.push(data);
   } else if(id[0]==="s"){
@@ -909,6 +934,7 @@ function openSync(){
       <button class="btn btn-ghost" id="sy_off">Turn off</button>
       <button class="btn btn-primary" id="sy_save">Save &amp; connect</button>
     </div>
+    ${on?`<button class="btn btn-ghost" id="sy_now" style="width:100%;margin-top:9px;">↻ Sync now</button>`:``}
     <details style="margin-top:16px;">
       <summary style="font-size:12.5px;color:var(--teal-deep);font-weight:700;cursor:pointer;">One-time setup (≈5 min)</summary>
       <ol style="font-size:12px;color:var(--ink-soft);line-height:1.6;padding-left:18px;margin-top:8px;">
@@ -935,14 +961,25 @@ function openSync(){
     const u=document.getElementById('sy_url').value.trim();
     if(!u){toast("Paste your Web App URL");return;}
     if(!/^https:\/\/script\.google\.com\/.*\/exec/.test(u)){toast("That doesn't look like an /exec URL");return;}
-    cloudSaveConfig(u); cloudInit();
+    pulling=false; pushing=false;            // clear any stuck locks
+    cloudSaveConfig(u); cloudInit(); cloudUnsubscribe();
     toast("Connecting…");
-    const pulled=await cloudPull(); cloudSubscribe();
+    const pulled=await cloudPull(); await cloudHeal(); cloudSubscribe();
     rebuild(); render(); setSyncBadge(); hideSheet();
     toast(pulled?"Connected — pulled team data":"Connected — sharing this device's data");
   };
+  const nowBtn=document.getElementById('sy_now');
+  if(nowBtn) nowBtn.onclick=async()=>{
+    pulling=false; pushing=false;            // clear any stuck locks
+    cloudInit(); cloudUnsubscribe();
+    toast("Syncing…");
+    const changed=await cloudPull(); await cloudHeal(); cloudSubscribe();
+    rebuild(); render(); setSyncBadge();
+    toast("Synced");
+  };
   document.getElementById('sy_off').onclick=()=>{
     cloudSaveConfig(""); cloudOn=false; cloudUnsubscribe();
+    pulling=false; pushing=false;
     setSyncBadge(); hideSheet(); toast("Team sync turned off");
   };
   showSheet();
@@ -983,6 +1020,16 @@ function wire(){
   // autosave safety on hide/blur
   window.addEventListener('beforeunload',()=>save(true));
   window.addEventListener('pagehide',()=>save(true));
+  // iOS suspends background timers; when the app comes back to the foreground,
+  // clear any stuck locks, pull the latest, and make sure the poll is running.
+  document.addEventListener('visibilitychange',async ()=>{
+    if(document.hidden||!cloudOn) return;
+    pulling=false; pushing=false;
+    const changed=await cloudPull();
+    if(changed){ rebuild(); render(); }
+    if(!pollTimer) cloudSubscribe();
+  });
+  window.addEventListener('focus',()=>{ if(cloudOn&&!pollTimer) cloudSubscribe(); });
 }
 
 /* ---------- boot ---------- */
@@ -993,10 +1040,10 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
   cloudInit();
   try{ SEED=await decompressSeed(); }
   catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
-  if(cloudOn){ await cloudPull(); cloudSubscribe(); }
+  if(cloudOn){ await cloudPull(); await cloudHeal(); cloudSubscribe(); }
   rebuild(); wire(); render();
   setSyncBadge();
-  if(cloudOn) toast("Team sync on");
+  if(cloudOn){ toast("Team sync on"); }
 })();
 </script>
 </body>
