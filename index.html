@@ -579,16 +579,16 @@ function render(){
     return;
   }
 
-  // group by city
+  // group by city (null-safe: synced/added offices may have blank fields)
   const cities={};
-  filtered.forEach(o=>{(cities[o.city]=cities[o.city]||[]).push(o);});
+  filtered.forEach(o=>{const c=(o.city||"Uncategorized");(cities[c]=cities[c]||[]).push(o);});
   const names=Object.keys(cities).sort((a,b)=>cities[b].length-cities[a].length||a.localeCompare(b));
   // auto-open when searching/filtering narrows things
   const forceOpen=(state.q||state.filter!=="all")&&filtered.length<120;
 
   let html="";
   names.forEach(city=>{
-    const list=cities[city].sort((a,b)=>a.name.localeCompare(b.name));
+    const list=cities[city].sort((a,b)=>(a.name||"").localeCompare(b.name||""));
     const open=forceOpen||state.openCity===city;
     html+=`<div class="cityrow${open?' open':''}" data-city="${esc(city)}">
       <button class="cityhdr" data-cityhdr="${esc(city)}">
