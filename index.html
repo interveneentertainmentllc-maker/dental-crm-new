@@ -505,20 +505,21 @@ function inflateGzipToString(bin){
 }
 async function decompressSeed(){
   const bin=Uint8Array.from(atob(SEED_B64),c=>c.charCodeAt(0));
-  // Try the browser's fast native path, but don't let it hang forever.
-  if('DecompressionStream' in window){
-    try{
+  // Use the reliable pure-JS inflate FIRST. The browser's native
+  // DecompressionStream hangs on some iOS Safari builds, and our pure-JS
+  // path decodes all 5,292 offices in ~0.1–0.3s, so there's no reason to
+  // risk the native hang. Native is only a secondary fallback.
+  try{
+    return JSON.parse(inflateGzipToString(bin));
+  }catch(e){
+    if('DecompressionStream' in window){
       const ds=new DecompressionStream('gzip');
       const stream=new Response(new Blob([bin]).stream().pipeThrough(ds));
-      const txt=await Promise.race([
-        stream.text(),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error("decompress timeout")),6000))
-      ]);
+      const txt=await stream.text();
       return JSON.parse(txt);
-    }catch(e){ /* fall through to pure-JS inflate */ }
+    }
+    throw e;
   }
-  // Reliable fallback: pure-JS gzip inflate (works even if the native path stalls).
-  return JSON.parse(inflateGzipToString(bin));
 }
 
 /* ---------- build working DB ---------- */
@@ -563,7 +564,7 @@ function render(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v7";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v8";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1115,9 +1116,7 @@ function wire(){
   document.getElementById('sheetBg').onclick=hideSheet;
   let st;
   document.getElementById('search').addEventListener('input',e=>{clearTimeout(st);st=setTimeout(()=>{state.q=e.target.value.trim();render();},180);});
-  document.getElementById('filterbar').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();requestAnimationFrame(render);
-    try{const fc=DB.filter(matchFilter).length;toast("filter="+state.filter+" · matches="+fc+" · DB="+DB.length);}catch(_){}
-  });
+  document.getElementById('filterbar').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();requestAnimationFrame(render);});
   // autosave safety on hide/blur
   window.addEventListener('beforeunload',()=>save(true));
   window.addEventListener('pagehide',()=>save(true));
