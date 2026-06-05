@@ -660,10 +660,8 @@ function render(){
   catch(err){
     try{
       const m=document.getElementById('main');
-      if(m) m.innerHTML='<div class="empty"><h3>List render error</h3><p style="font-family:monospace;font-size:12px;word-break:break-word;white-space:pre-wrap;text-align:left">'+
-        (err&&err.message?err.message:String(err))+'\n\nfilter='+state.filter+' · DB='+(typeof DB!=="undefined"?DB.length:"?")+'</p></div>';
+      if(m) m.innerHTML='<div class="empty"><h3>Couldn\'t display the list</h3><p>Try clearing the search or switching filters. Your data is safe.</p></div>';
     }catch(_){}
-    try{toast("render error: "+(err&&err.message?err.message:err));}catch(_){}
   }
 }
 function renderInner(){
@@ -689,7 +687,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v21";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v23";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1270,6 +1268,7 @@ function openSync(){
     hideSheet();
     toast("Restored "+DB.length.toLocaleString()+" offices");
   };
+  const nowBtn=document.getElementById('sy_now');
   if(nowBtn) nowBtn.onclick=async()=>{
     pulling=false; pushing=false;            // clear any stuck locks
     cloudInit(); cloudUnsubscribe();
