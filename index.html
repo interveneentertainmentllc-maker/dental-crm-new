@@ -641,10 +641,13 @@ function isVisited(o){return !!(o.visited||o.visitDay||o.notes||(o.visits&&o.vis
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function normDate(s){ // accept YYYY-MM-DD, MM/DD/YYYY, or Date-ish; return YYYY-MM-DD or ""
   if(!s)return ""; s=String(s).trim();
+  // validate real calendar ranges, not just the shape, so a bad hand-edit like
+  // "2026-13-45" is rejected (->"") rather than stored and breaking sort/display.
+  const okYMD=(y,mo,da)=>{y=+y;mo=+mo;da=+da;return y>=1900&&y<=2100&&mo>=1&&mo<=12&&da>=1&&da<=31;};
   let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  if(m){ if(!okYMD(m[1],m[2],m[3]))return ""; return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0"); }
   m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if(m)return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");
+  if(m){ if(!okYMD(m[3],m[1],m[2]))return ""; return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0"); }
   const d=new Date(s); if(!isNaN(d))return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
   return "";
 }
@@ -678,7 +681,10 @@ function parseVisits(v){
 function visitsToString(visits){
   if(!visits||!visits.length)return "";
   return visits.map(v=>{
-    const c=v.color||""; const n=(v.note||"").replace(/[~|]/g," ").trim();
+    // ~ | and , are all structural separators in the stored format / parser,
+    // so strip them from free-text notes to avoid splitting a note into pieces
+    // (a comma in "call, then email" would otherwise truncate the note on read).
+    const c=v.color||""; const n=(v.note||"").replace(/[~|,]/g," ").replace(/\s+/g," ").trim();
     if(!c&&!n)return v.date;
     return v.date+"~"+c+(n?"~"+n:"");
   }).join(" | ");
@@ -744,7 +750,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v27";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v29";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
