@@ -685,7 +685,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v19";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v20";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1337,19 +1337,24 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
   cloudInit();
   setSyncBadge();                 // reflect saved sync state immediately
 
-  // STEP 1: Always build the base list FIRST. The 5,292 offices live in the file,
-  // not the cloud, so they must exist before any sync runs — otherwise a pull
-  // could operate against an empty base and the anti-wipe guard would be blind.
-  try{ SEED=await decompressSeed(); }
-  catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
-  rebuild(); wire(); render();
+  // Wire up all buttons/handlers IMMEDIATELY, before any heavy work. The sync
+  // pill, Add, Export, search, filters etc. must respond even while the office
+  // list is still decompressing (or if decompression stalls). Previously wire()
+  // ran only AFTER decompressSeed(), so a slow/stuck decompress left every
+  // button dead — which looked like "clicking sync does nothing" / blank app.
+  wire();
   setSyncBadge();
 
-  // STEP 2: Now that the base list is up, start cloud sync. It can only ADD or
-  // OVERLAY — never wipe the base list (guarded in cloudPull).
+  // Start cloud sync in parallel — it doesn't depend on the base list being ready.
   if(cloudOn){
-    (async()=>{ try{ await cloudPull(); await cloudHeal(); }catch(e){} cloudSubscribe(); rebuild(); render(); setSyncBadge(); })();
+    (async()=>{ try{ await cloudPull(); }catch(e){} cloudSubscribe(); try{rebuild();render();}catch(e){} setSyncBadge(); })();
   }
+
+  // Build the base list. If it stalls, the UI above is already alive and usable.
+  try{ SEED=await decompressSeed(); }
+  catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
+  rebuild(); render();
+  setSyncBadge();
 })();
 </script>
 </body>
