@@ -565,18 +565,22 @@ function inflateGzipToString(bin){
 }
 async function decompressSeed(){
   const bin=Uint8Array.from(atob(SEED_B64),c=>c.charCodeAt(0));
-  // Use the reliable pure-JS inflate FIRST. The browser's native
-  // DecompressionStream hangs on some iOS Safari builds, and our pure-JS
-  // path decodes all 5,292 offices in ~0.1–0.3s, so there's no reason to
-  // risk the native hang. Native is only a secondary fallback.
+  // Pure-JS inflate FIRST (synchronous, ~0.1–0.3s, reliable on all browsers).
   try{
     return JSON.parse(inflateGzipToString(bin));
   }catch(e){
+    // Native DecompressionStream only as fallback, and RACED against a timeout so
+    // a known iOS-Safari hang can never freeze the boot. If it stalls, we reject
+    // and the caller comes alive with synced data instead of a blank screen.
     if('DecompressionStream' in window){
-      const ds=new DecompressionStream('gzip');
-      const stream=new Response(new Blob([bin]).stream().pipeThrough(ds));
-      const txt=await stream.text();
-      return JSON.parse(txt);
+      try{
+        return await Promise.race([
+          (async()=>{ const ds=new DecompressionStream('gzip');
+            const stream=new Response(new Blob([bin]).stream().pipeThrough(ds));
+            return JSON.parse(await stream.text()); })(),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error("decompress timeout")),6000))
+        ]);
+      }catch(e2){ throw e2; }
     }
     throw e;
   }
@@ -685,7 +689,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v20";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v21";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1286,11 +1290,12 @@ function hideSheet(){document.body.classList.remove('sheet-open');document.getEl
 
 /* ---------- events ---------- */
 function wire(){
-  document.getElementById('main').addEventListener('click',e=>{
+  const on=(id,ev,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener(ev,fn); };
+  const mainEl=document.getElementById('main');
+  if(mainEl) mainEl.addEventListener('click',e=>{
     const ch=e.target.closest('[data-cityhdr]');
     if(ch){const c=ch.getAttribute('data-cityhdr');state.openCity=(state.openCity===c)?null:c;
       const row=ch.closest('.cityrow');
-      // if forceOpen mode, just toggle this row
       if(row.classList.contains('open')&&state.openCity!==c){row.classList.remove('open');}
       else if(state.openCity===c){document.querySelectorAll('.cityrow.open').forEach(r=>{if(r!==row)r.classList.remove('open');});row.classList.add('open');}
       else{row.classList.toggle('open');}
@@ -1298,32 +1303,29 @@ function wire(){
     const op=e.target.closest('[data-open]');
     if(op){openDetail(op.getAttribute('data-open'));return;}
   });
-  document.getElementById('sheetBody').addEventListener('click',e=>{
+  on('sheetBody','click',e=>{
     const ed=e.target.closest('[data-edit]'); if(ed){openForm(ed.getAttribute('data-edit'));return;}
     const dl=e.target.closest('[data-del]'); if(dl){delOffice(dl.getAttribute('data-del'));return;}
   });
-  document.getElementById('btnAdd').onclick=()=>openForm(null);
-  document.getElementById('btnExport').onclick=openExport;
-  document.getElementById('btnSync').onclick=openSync;
-  document.getElementById('btnView').onclick=()=>setView(state.view==="map"?"list":"map");
-  document.getElementById('locateBtn').onclick=locateMe;
-  document.getElementById('nearbyBtn').onclick=toggleNearby;
-  document.getElementById('btnEmail').onclick=()=>{hideSheet();setTimeout(emailCSV,200);};
-  document.getElementById('sheetX').onclick=hideSheet;
-  document.getElementById('sheetBg').onclick=hideSheet;
+  on('btnAdd','click',()=>openForm(null));
+  on('btnExport','click',openExport);
+  on('btnSync','click',openSync);
+  on('btnView','click',()=>setView(state.view==="map"?"list":"map"));
+  on('locateBtn','click',locateMe);
+  on('nearbyBtn','click',toggleNearby);
+  on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
+  on('sheetX','click',hideSheet);
+  on('sheetBg','click',hideSheet);
   let st;
-  document.getElementById('search').addEventListener('input',e=>{clearTimeout(st);st=setTimeout(()=>{state.q=e.target.value.trim();render();},180);});
-  document.getElementById('filterbar').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();requestAnimationFrame(render);});
+  on('search','input',e=>{clearTimeout(st);st=setTimeout(()=>{state.q=e.target.value.trim();render();},180);});
+  on('filterbar','click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();requestAnimationFrame(render);});
   // autosave safety on hide/blur
-  window.addEventListener('beforeunload',()=>save(true));
-  window.addEventListener('pagehide',()=>save(true));
-  // iOS suspends background timers; when the app comes back to the foreground,
-  // clear any stuck locks, pull the latest, and make sure the poll is running.
+  window.addEventListener('beforeunload',()=>{try{save(true);}catch(e){}});
+  window.addEventListener('pagehide',()=>{try{save(true);}catch(e){}});
   document.addEventListener('visibilitychange',async ()=>{
     if(document.hidden||!cloudOn) return;
     pulling=false; pushing=false;
-    const changed=await cloudPull();
-    if(changed){ rebuild(); render(); }
+    try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
     if(!pollTimer) cloudSubscribe();
   });
   window.addEventListener('focus',()=>{ if(cloudOn&&!pollTimer) cloudSubscribe(); });
@@ -1350,9 +1352,13 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
     (async()=>{ try{ await cloudPull(); }catch(e){} cloudSubscribe(); try{rebuild();render();}catch(e){} setSyncBadge(); })();
   }
 
-  // Build the base list. If it stalls, the UI above is already alive and usable.
+  // Build the base list. If it stalls/fails, the UI above is already alive and
+  // usable; show whatever synced data exists rather than a dead blank screen.
   try{ SEED=await decompressSeed(); }
-  catch(e){ document.getElementById('main').innerHTML='<div class="empty"><h3>Load error</h3><p>'+esc(e.message)+'</p></div>'; return; }
+  catch(e){ SEED=[]; try{rebuild();render();}catch(_){}
+    const m=document.getElementById('main');
+    if(m && !DB.length){ m.innerHTML='<div class="empty"><h3>Couldn\'t load the office list</h3><p>Pull to refresh or reopen the app. Your synced offices and the menu still work.</p></div>'; }
+    setSyncBadge(); return; }
   rebuild(); render();
   setSyncBadge();
 })();
