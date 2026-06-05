@@ -119,6 +119,20 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .visititem{display:flex;justify-content:space-between;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;}
 .visitdel{font-size:12px;color:var(--danger);background:none;border:none;cursor:pointer;padding:4px;}
 .visitempty{font-size:13px;color:var(--ink-faint);font-style:italic;}
+.activefld{margin-bottom:18px;}
+.activetoggle{display:inline-flex;align-items:center;gap:10px;cursor:pointer;background:none;border:none;padding:0;width:auto;}
+.activetoggle .activeknob{position:relative;width:46px;height:27px;border-radius:14px;background:var(--line-strong);transition:background .2s;flex:0 0 auto;}
+.activetoggle .activeknob::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+.activetoggle.on .activeknob{background:var(--green);}
+.activetoggle.on .activeknob::after{transform:translateX(19px);}
+.activetoggle .activelabel{font-size:15px;font-weight:600;color:var(--ink);}
+.vcolorrow{display:flex;gap:7px;}
+.vcolorbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;padding:9px 6px;border:1.5px solid var(--line-strong);border-radius:9px;background:var(--surface);color:var(--ink);cursor:pointer;}
+.vcolorbtn.on{border-color:var(--ink);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--ink);}
+.vnote{width:100%;font-size:13px;padding:9px 10px;border:1.5px solid var(--line-strong);border-radius:9px;background:var(--surface);color:var(--ink);}
+.vdot{display:inline-block;width:11px;height:11px;border-radius:50%;flex:0 0 auto;vertical-align:middle;margin-right:6px;border:1px solid rgba(0,0,0,.1);}
+.vleft{display:inline-flex;align-items:center;gap:2px;flex-wrap:wrap;}
+.vnotetag{font-size:12px;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin-left:7px;}
 .pinbtn{display:inline-flex;align-items:center;gap:7px;width:auto;flex:0 0 auto;background:var(--teal-wash);border:1.5px solid var(--teal);color:var(--teal-deep);padding:11px 14px;}
 .pinbtn:active{background:#cfe7e1;}
 .pinbtn:disabled{opacity:.6;}
@@ -248,6 +262,11 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
   <button class="fchip" data-f="d7">Visited ≤7d</button>
   <button class="fchip" data-f="d30">Visited ≤30d</button>
   <button class="fchip" data-f="drange">Date range</button>
+  <button class="fchip" data-f="active">Active</button>
+  <button class="fchip" data-f="inactive">Inactive</button>
+  <button class="fchip" data-f="cgreen"><span class="vdot" style="background:#2f7d3f"></span>Good</button>
+  <button class="fchip" data-f="cyellow"><span class="vdot" style="background:#bf9b16"></span>Okay</button>
+  <button class="fchip" data-f="cred"><span class="vdot" style="background:#b3402f"></span>Poor</button>
 </div>
 <div class="daterangebar" id="daterangebar" style="display:none;"></div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
@@ -306,6 +325,10 @@ function cloudInit(){
 const SHEET_COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits"];
 
 // Build the array-of-rows the Sheet should contain from the current store.
+function visitedCell(o){ // compound: "Yes" / "INACTIVE" / "Yes;INACTIVE" / ""
+  const parts=[]; if(o.visited)parts.push("Yes"); if(o.active===false)parts.push("INACTIVE");
+  return parts.join(";");
+}
 function storeToRows(){
   const rows=[];
   // edited seed offices
@@ -313,7 +336,7 @@ function storeToRows(){
     const o=store.over[idx]||{}; const id="s"+idx;
     rows.push({id,name:o.name||"",addr:o.addr||"",city:o.city||"",zip:o.zip||"",lat:o.lat||"",lng:o.lng||"",
       phone:o.phone||"",email:o.email||"",scanner:o.scanner||"",lab:o.lab||"",drs:o.drs||"",hours:o.hours||"",
-      visitDay:o.visitDay||"",visited:o.visited?"Yes":"",notes:o.notes||"",visits:(o.visits&&o.visits.length)?o.visits.join(" | "):""});
+      visitDay:o.visitDay||"",visited:visitedCell(o),notes:o.notes||"",visits:visitsToString(parseVisits(o.visits))});
   });
   // deleted seed offices
   (store.del||[]).forEach(idx=>{ rows.push({id:"s"+idx,name:"",visited:"DELETED",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visits:""}); });
@@ -321,7 +344,7 @@ function storeToRows(){
   (store.add||[]).forEach(a=>{
     rows.push({id:a.id||("c"+Math.random().toString(36).slice(2)),name:a.name||"",addr:a.addr||"",city:a.city||"",zip:a.zip||"",
       lat:a.lat||"",lng:a.lng||"",phone:a.phone||"",email:a.email||"",scanner:a.scanner||"",lab:a.lab||"",drs:a.drs||"",
-      hours:a.hours||"",visitDay:a.visitDay||"",visited:a.visited?"Yes":"",notes:a.notes||"",visits:(a.visits&&a.visits.length)?a.visits.join(" | "):""});
+      hours:a.hours||"",visitDay:a.visitDay||"",visited:visitedCell(a),notes:a.notes||"",visits:visitsToString(parseVisits(a.visits))});
   });
   return rows;
 }
@@ -338,10 +361,10 @@ function rowsToStore(rows){
       // treated as "no override" and ignored — a partial/garbled Sheet read can
       // never delete the base list this way. (This was the data-wipe bug.)
       if(visited==="deleted"){ if(ns.del.indexOf(idx)<0)ns.del.push(idx); return; }
-      if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!(r.visits&&String(r.visits).trim())) return;
+      if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!(r.visits&&String(r.visits).trim())&&visited.indexOf("inactive")<0) return;
       ns.over[idx]={name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
-        visitDay:r.visitDay||"",visited:(visited==="yes"||visited==="true"||visited==="1"),notes:r.notes||"",visits:r.visits||""};
+        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||""};
     } else {
       if(visited==="deleted") return; // a deleted custom office just disappears
       // De-duplicate added offices: skip if we've already taken this id,
@@ -352,7 +375,7 @@ function rowsToStore(rows){
       seenAddId[id]=1; if(key!=="||")seenAddKey[key]=1;
       ns.add.push({id,name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
-        visitDay:r.visitDay||"",visited:(visited==="yes"||visited==="true"||visited==="1"),notes:r.notes||"",visits:r.visits||"",seed:false});
+        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",seed:false});
     }
   });
   return ns;
@@ -593,17 +616,17 @@ function rebuild(){
   const delSet=new Set(store.del);
   const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes"];
   const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });
-    // visits: a list of YYYY-MM-DD strings, newest first. May arrive as a
-    // pipe/comma-separated string (from the Sheet) or already an array.
-    if(o.visits==null)o.visits=[];
-    else if(typeof o.visits==="string")o.visits=o.visits.split(/[|,]/).map(s=>s.trim()).filter(Boolean);
-    else if(!Array.isArray(o.visits))o.visits=[];
-    o.visits=o.visits.map(d=>normDate(d)).filter(Boolean).sort().reverse();
+    // visits: a list of {date, color, note}, newest first. Backward compatible:
+    // may arrive as a pipe/comma-separated string from the Sheet, where each
+    // visit is "YYYY-MM-DD" (old) or "YYYY-MM-DD~color~note" (new). Or an array
+    // of strings (old) or objects (already parsed).
+    o.visits=parseVisits(o.visits);
+    if(o.active===undefined)o.active=true;
     return o;};
   SEED.forEach((r,i)=>{
     if(delSet.has(i))return;
     const o={id:"s"+i,seed:true,name:r[0],addr:r[1],city:r[2],zip:r[3],lat:r[4],lng:r[5],county:r[6],
-             phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visited:false};
+             phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visited:false,active:true};
     const ov=store.over[i];
     if(ov)Object.assign(o,ov);
     DB.push(norm(o));
@@ -631,7 +654,36 @@ function fmtDate(s){ // YYYY-MM-DD -> "Jun 4, 2026"
   return dt.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 }
 function daysAgo(s){const d=normDate(s);if(!d)return Infinity;const p=d.split("-");const dt=new Date(+p[0],+p[1]-1,+p[2]);return Math.floor((Date.now()-dt.getTime())/86400000);}
-function lastVisit(o){return (o.visits&&o.visits.length)?o.visits[0]:"";}
+function lastVisit(o){return (o.visits&&o.visits.length)?o.visits[0].date:"";}
+// --- visit objects: {date:"YYYY-MM-DD", color:"green|yellow|red"|"", note:""} ---
+const VCOLORS={green:"#2f7d3f",yellow:"#bf9b16",red:"#b3402f"};
+const VLABEL={green:"Good",yellow:"Okay",red:"Poor"};
+function parseVisits(v){
+  let arr=[];
+  if(v==null) arr=[];
+  else if(Array.isArray(v)) arr=v.slice();
+  else if(typeof v==="string") arr=v.split(/[|,]/).map(s=>s.trim()).filter(Boolean);
+  const out=arr.map(item=>{
+    if(item&&typeof item==="object"){ const d=normDate(item.date); if(!d)return null;
+      return {date:d, color:(item.color||""), note:(item.note||"")}; }
+    // string form: "date" or "date~color~note"
+    const parts=String(item).split("~");
+    const d=normDate(parts[0]); if(!d)return null;
+    return {date:d, color:(parts[1]||"").trim(), note:(parts[2]||"").trim()};
+  }).filter(Boolean);
+  // newest first by date
+  out.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  return out;
+}
+function visitsToString(visits){
+  if(!visits||!visits.length)return "";
+  return visits.map(v=>{
+    const c=v.color||""; const n=(v.note||"").replace(/[~|]/g," ").trim();
+    if(!c&&!n)return v.date;
+    return v.date+"~"+c+(n?"~"+n:"");
+  }).join(" | ");
+}
+function lastColor(o){ if(!o.visits)return ""; for(const v of o.visits){ if(v.color)return v.color; } return ""; }
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function toast(msg,undo){const t=document.getElementById('toast');t.innerHTML=esc(msg)+(undo?' <span class="undo" id="undoLink">Undo</span>':'');t.classList.add('show');if(undo){document.getElementById('undoLink').onclick=()=>{doUndo();t.classList.remove('show');};}clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),undo?5000:1800);}
 
@@ -649,6 +701,11 @@ function matchFilter(o){
     if(state.dFrom&&lv<state.dFrom)return false;
     if(state.dTo&&lv>state.dTo)return false;
   }
+  if(state.filter==="active"&&o.active===false)return false;
+  if(state.filter==="inactive"&&o.active!==false)return false;
+  if(state.filter==="cgreen"&&lastColor(o)!=="green")return false;
+  if(state.filter==="cyellow"&&lastColor(o)!=="yellow")return false;
+  if(state.filter==="cred"&&lastColor(o)!=="red")return false;
   if(state.q){const q=state.q.toLowerCase();const S=v=>(v==null?"":String(v)).toLowerCase();
     if(!(S(o.name).includes(q)||S(o.city).includes(q)||S(o.addr).includes(q)||S(o.drs).includes(q)||S(o.lab).includes(q)||S(o.zip).includes(q)))return false;}
   return true;
@@ -680,14 +737,14 @@ function renderInner(){
         drb.setAttribute('data-built','1');
         document.getElementById('dr_from').onchange=e=>{state.dFrom=e.target.value;render();};
         document.getElementById('dr_to').onchange=e=>{state.dTo=e.target.value;render();};
-        document.getElementById('dr_clear').onclick=()=>{state.dFrom="";state.dTo="";document.getElementById('dr_from').value="";document.getElementById('dr_to').value="";render();};
+        const drClear=document.getElementById('dr_clear'); if(drClear) drClear.onclick=()=>{state.dFrom="";state.dTo="";const a=document.getElementById('dr_from'),b=document.getElementById('dr_to');if(a)a.value="";if(b)b.value="";render();};
       }
     } else { drb.style.display="none"; drb.setAttribute('data-built',"0"); drb.innerHTML=""; }
   }
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v23";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v27";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -738,6 +795,7 @@ function renderInner(){
 
 /* ---------- Map view ---------- */
 function pinClass(o){ const scOn=o.scanner&&o.scanner!=="None"&&o.scanner!==""; return isVisited(o)?"visited":(scOn?"scanner":""); }
+function pinStyle(o){ const c=lastColor(o); return c?`style="background:${VCOLORS[c]};border-color:#fff"`:""; }
 function haversine(lat1,lng1,lat2,lng2){
   const R=3958.8, toRad=x=>x*Math.PI/180;
   const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
@@ -775,7 +833,7 @@ function popupHTML(o){
     </div>`;
 }
 function makeMarker(o){
-  const icon=L.divIcon({className:'',html:`<div class="pin ${pinClass(o)}"></div>`,iconSize:[16,16],iconAnchor:[8,16],popupAnchor:[0,-15]});
+  const icon=L.divIcon({className:'',html:`<div class="pin ${pinClass(o)}" ${pinStyle(o)}></div>`,iconSize:[16,16],iconAnchor:[8,16],popupAnchor:[0,-15]});
   const m=L.marker([o.lat,o.lng],{icon});
   m.bindPopup(()=>popupHTML(o),{minWidth:230,maxWidth:260});
   m._oid=o.id;
@@ -886,6 +944,7 @@ function openDetail(id){
   const o=officeById(id); if(!o)return;
   if(mapObj){try{mapObj.closePopup();}catch(e){}}
   document.getElementById('sheetTitle').textContent=o.name;
+  const inactive=(o.active===false);
   const scOn=o.scanner&&o.scanner!=="";
   document.getElementById('sheetBody').innerHTML=`
     <iframe class="detail-map" src="${mapEmbed(o)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
@@ -906,7 +965,11 @@ function openDetail(id){
       <div class="dcard"><div class="dl">Visit Day / Time</div><div class="dv">${esc(o.visitDay)||'—'}</div></div>
       <div class="dcard"><div class="dl">Last Visited</div><div class="dv" style="${lastVisit(o)?'color:var(--teal)':''}">${lastVisit(o)?esc(fmtDate(lastVisit(o))):'—'}</div></div>
       <div class="dcard"><div class="dl">Total Visits</div><div class="dv">${(o.visits&&o.visits.length)||0}</div></div>
+      <div class="dcard"><div class="dl">Latest Status</div><div class="dv">${lastColor(o)?`<span class="vdot" style="background:${VCOLORS[lastColor(o)]}"></span>${VLABEL[lastColor(o)]}`:'<span style="color:var(--ink-faint)">—</span>'}</div></div>
+      <div class="dcard"><div class="dl">Active</div><div class="dv" style="color:${inactive?'var(--danger)':'var(--green)'}">${inactive?'Inactive':'Active'}</div></div>
     </div>
+    ${(o.visits&&o.visits.length)?`<div class="dl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:6px;">Recent Visits</div>
+    <div class="visitlist">${o.visits.slice(0,8).map(v=>{const dot=v.color?`<span class="vdot" style="background:${VCOLORS[v.color]||'#ccc'}"></span>`:'';const note=v.note?`<span class="vnotetag">${esc(v.note)}</span>`:'';return `<div class="visititem"><span class="vleft">${dot}${esc(fmtDate(v.date))}${note}</span></div>`;}).join('')}</div>`:''}
     <div class="dl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:6px;">Notes</div>
     <div class="notebox">${o.notes?esc(o.notes):'<span style="color:var(--ink-faint)">No notes yet.</span>'}</div>
     <div class="actions">
@@ -926,6 +989,11 @@ function openForm(id){
   document.getElementById('sheetTitle').textContent=isNew?"Add Office":"Edit Office";
   document.getElementById('sheetBody').innerHTML=`
     <div class="fld"><label>Practice Name *</label><input id="f_name" value="${esc(o.name)}" placeholder="e.g. Smile Dental"></div>
+    <div class="fld activefld"><label>Status</label>
+      <button type="button" id="f_active" class="activetoggle ${o.active===false?'':'on'}" role="switch" aria-checked="${o.active===false?'false':'true'}">
+        <span class="activeknob"></span><span class="activelabel">${o.active===false?'Inactive':'Active'}</span>
+      </button>
+    </div>
     <div class="fld"><label>Street Address</label><input id="f_addr" value="${esc(o.addr)}" placeholder="123 Main St"></div>
     <div class="row2"><div class="fld"><label>City *</label><input id="f_city" value="${esc(o.city)}" placeholder="Chicago"></div>
       <div class="fld"><label>ZIP</label><input id="f_zip" value="${esc(o.zip)}" inputmode="numeric" placeholder="60601"></div></div>
@@ -958,6 +1026,12 @@ function openForm(id){
           <input type="date" id="f_visitdate" value="${todayStr()}">
           <button type="button" class="btn btn-ghost visitbtn" id="f_visitadd">+ Log visit</button>
         </div>
+        <div class="vcolorrow" id="f_vcolor">
+          <button type="button" class="vcolorbtn" data-vc="green"><span class="vdot" style="background:${VCOLORS.green}"></span>Good</button>
+          <button type="button" class="vcolorbtn" data-vc="yellow"><span class="vdot" style="background:${VCOLORS.yellow}"></span>Okay</button>
+          <button type="button" class="vcolorbtn" data-vc="red"><span class="vdot" style="background:${VCOLORS.red}"></span>Poor</button>
+        </div>
+        <input id="f_vnote" class="vnote" type="text" placeholder="Optional note (e.g. uses competitor, follow up)">
         <div id="f_visitlist" class="visitlist"></div>
       </div>
     </div>
@@ -967,61 +1041,101 @@ function openForm(id){
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M5 13l4 4L19 7"/></svg> Save</button>
     </div>`;
   let scan=o.scanner||"";
-  document.getElementById('f_scanwrap').querySelectorAll('[data-scan]').forEach(b=>{
+  let activeState=(o.active!==false);
+  const atog=document.getElementById('f_active');
+  if(atog) atog.onclick=()=>{ activeState=!activeState;
+    atog.classList.toggle('on',activeState); atog.setAttribute('aria-checked',activeState?'true':'false');
+    atog.querySelector('.activelabel').textContent=activeState?'Active':'Inactive'; };
+  const scanwrap=document.getElementById('f_scanwrap');
+  if(scanwrap) scanwrap.querySelectorAll('[data-scan]').forEach(b=>{
     b.onclick=()=>{const v=b.getAttribute('data-scan');scan=(scan===v)?"":v;document.querySelectorAll('#f_scanwrap .scanopt').forEach(x=>x.classList.toggle('on',x.getAttribute('data-scan')===scan));};
   });
   // Drop-pin: capture the rep's current GPS location into the lat/lng fields.
-  document.getElementById('f_pin').onclick=function(){
+  const pinBtn=document.getElementById('f_pin');
+  if(pinBtn) pinBtn.onclick=function(){
     const btn=this, st=document.getElementById('f_pinstatus');
-    if(!navigator.geolocation){ st.textContent="Location not supported on this device"; return; }
-    if(window.isSecureContext===false){ st.textContent="Open the https:// site to use location"; return; }
-    btn.disabled=true; st.textContent="Getting your location…";
+    if(!navigator.geolocation){ if(st)st.textContent="Location not supported on this device"; return; }
+    if(window.isSecureContext===false){ if(st)st.textContent="Open the https:// site to use location"; return; }
+    btn.disabled=true; if(st)st.textContent="Getting your location…";
     navigator.geolocation.getCurrentPosition(pos=>{
       const la=pos.coords.latitude, ln=pos.coords.longitude, acc=Math.round(pos.coords.accuracy||0);
-      document.getElementById('f_lat').value=la.toFixed(6);
-      document.getElementById('f_lng').value=ln.toFixed(6);
-      st.innerHTML="📍 "+la.toFixed(5)+", "+ln.toFixed(5)+(acc?(' <span style="color:var(--ink-faint)">±'+acc+'m</span>'):'');
-      btn.disabled=false; document.getElementById('f_pinlabel').textContent="Pin dropped — update";
+      const latEl=document.getElementById('f_lat'), lngEl=document.getElementById('f_lng'), lblEl=document.getElementById('f_pinlabel');
+      if(latEl)latEl.value=la.toFixed(6);
+      if(lngEl)lngEl.value=ln.toFixed(6);
+      if(st)st.innerHTML="📍 "+la.toFixed(5)+", "+ln.toFixed(5)+(acc?(' <span style="color:var(--ink-faint)">±'+acc+'m</span>'):'');
+      btn.disabled=false; if(lblEl)lblEl.textContent="Pin dropped — update";
       toast("Pinned your current location");
     }, err=>{
       btn.disabled=false;
-      st.textContent = err.code===1 ? "Location blocked — allow it in Settings ▸ Safari"
+      if(st)st.textContent = err.code===1 ? "Location blocked — allow it in Settings ▸ Safari"
         : err.code===3 ? "Location timed out — try again" : "Couldn't get your location";
     }, {enableHighAccuracy:true, timeout:20000, maximumAge:0});
   };
-  document.getElementById('f_cancel').onclick=()=>{ if(id)openDetail(id); else hideSheet(); };
-  // Visit history: editable working copy, newest first.
-  let visits=Array.isArray(o.visits)?o.visits.slice():[];
+  const cancelBtn=document.getElementById('f_cancel');
+  if(cancelBtn) cancelBtn.onclick=()=>{ if(id)openDetail(id); else hideSheet(); };
+  // Visit history: editable working copy of {date,color,note}, newest first.
+  let visits=parseVisits(o.visits);
+  let pickColor="";
+  const vcwrap=document.getElementById('f_vcolor');
+  if(vcwrap) vcwrap.querySelectorAll('[data-vc]').forEach(b=>{
+    b.onclick=()=>{ const c=b.getAttribute('data-vc'); pickColor=(pickColor===c)?"":c;
+      vcwrap.querySelectorAll('.vcolorbtn').forEach(x=>x.classList.toggle('on',x.getAttribute('data-vc')===pickColor)); };
+  });
   const renderVisits=()=>{
     const box=document.getElementById('f_visitlist');
+    if(!box) return;
     if(!visits.length){ box.innerHTML='<div class="visitempty">No visits logged yet.</div>'; return; }
-    box.innerHTML=visits.map((d,i)=>`<div class="visititem"><span>${esc(fmtDate(d))}</span><button type="button" data-vi="${i}" class="visitdel">Remove</button></div>`).join('');
+    box.innerHTML=visits.map((v,i)=>{
+      const dot=v.color?`<span class="vdot" style="background:${VCOLORS[v.color]||'#ccc'}" title="${VLABEL[v.color]||''}"></span>`:'';
+      const note=v.note?`<span class="vnotetag">${esc(v.note)}</span>`:'';
+      return `<div class="visititem"><span class="vleft">${dot}${esc(fmtDate(v.date))}${note}</span><button type="button" data-vi="${i}" class="visitdel">Remove</button></div>`;
+    }).join('');
     box.querySelectorAll('[data-vi]').forEach(b=>{ b.onclick=()=>{ visits.splice(+b.getAttribute('data-vi'),1); renderVisits(); }; });
   };
   renderVisits();
-  document.getElementById('f_visitadd').onclick=()=>{
-    const v=normDate(document.getElementById('f_visitdate').value);
+  const addBtn=document.getElementById('f_visitadd');
+  if(addBtn) addBtn.onclick=()=>{
+    const dEl=document.getElementById('f_visitdate'); const v=normDate(dEl?dEl.value:"");
     if(!v){toast("Pick a date first");return;}
-    if(visits.indexOf(v)<0){visits.push(v);visits.sort().reverse();}
+    const vnEl=document.getElementById('f_vnote'); const note=vnEl?vnEl.value.trim():"";
+    // one entry per date: update existing date's color/note, else add
+    const ex=visits.find(x=>x.date===v);
+    if(ex){ ex.color=pickColor||ex.color; if(note)ex.note=note; toast("Updated visit on "+fmtDate(v)); }
+    else { visits.push({date:v,color:pickColor,note}); toast("Visit logged — tap Save to keep it"); }
+    visits.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+    pickColor=""; if(vcwrap) vcwrap.querySelectorAll('.vcolorbtn').forEach(x=>x.classList.remove('on'));
+    if(vnEl) vnEl.value="";
     renderVisits();
   };
-  document.getElementById('f_save').onclick=function(){ this.disabled=true; saveForm(id,()=>scan,()=>visits); };
+  const saveBtn=document.getElementById('f_save');
+  if(saveBtn) saveBtn.onclick=function(){ this.disabled=true; saveForm(id,()=>scan,()=>visits,()=>activeState); };
   showSheet();
 }
 
-function saveForm(id,getScan,getVisits){
-  const g=x=>document.getElementById(x).value.trim();
-  const name=g('f_name'), city=g('f_city');
-  if(!name){toast("Name is required");return;}
-  if(!city){toast("City is required");return;}
-  let visits=(getVisits?getVisits():[]).map(normDate).filter(Boolean);
+function saveForm(id,getScan,getVisits,getActive){
+  const g=x=>{const el=document.getElementById(x);return el?el.value.trim():"";};
+  // For an EXISTING office, fall back to its stored name/city if the field is
+  // blank — so logging a visit never gets discarded just because a base record
+  // happened to have an empty city. Only a brand-new office must type them in.
+  const existing=id?officeById(id):null;
+  let name=g('f_name'), city=g('f_city');
+  if(!name&&existing)name=existing.name||"";
+  if(!city&&existing)city=existing.city||"";
+  if(!id){
+    if(!name){toast("Name is required");return;}
+    if(!city){toast("City is required");return;}
+  } else if(!name){
+    // editing but the name somehow blanked out — keep whatever was there
+    name=(existing&&existing.name)||"Untitled office";
+  }
+  let visits=parseVisits(getVisits?getVisits():[]);
   // Auto-fill: a brand-new office implies a visit today if the rep didn't log one.
-  if(!id && !visits.length) visits=[todayStr()];
-  visits=Array.from(new Set(visits)).sort().reverse();
+  if(!id && !visits.length) visits=[{date:todayStr(),color:"",note:""}];
   const data={name,addr:g('f_addr'),city,zip:g('f_zip'),
     lat:parseFloat(g('f_lat'))||"",lng:parseFloat(g('f_lng'))||"",
     phone:g('f_phone'),email:g('f_email'),scanner:getScan(),lab:g('f_lab'),
-    drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes'),visits};
+    drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes'),visits,
+    active:(getActive?getActive():true)};
   pushUndo(id?"edit "+name:"add "+name);
   if(!id){
     data.id="c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -1076,10 +1190,10 @@ function quickNote(id){
 /* ---------- export / email ---------- */
 function buildCSV(onlyVisited){
   const rows=DB.filter(o=>onlyVisited?isVisited(o):true);
-  const head=["Practice Name","Address","City","State","ZIP","Latitude","Longitude","County","Phone","Email","Scanner","Current Lab","Doctors","Office Hours","Visit Day/Time","Visited","Last Visited","Visit Count","All Visit Dates","Notes"];
+  const head=["Practice Name","Address","City","State","ZIP","Latitude","Longitude","County","Phone","Email","Scanner","Current Lab","Doctors","Office Hours","Visit Day/Time","Visited","Active","Last Visited","Latest Status","Visit Count","All Visit Dates","Notes"];
   const q=v=>{v=(v==null?"":String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const lines=[head.join(",")];
-  rows.forEach(o=>lines.push([o.name,o.addr,o.city,"IL",o.zip,o.lat,o.lng,o.county||"",o.phone,o.email,o.scanner,o.lab||"",o.drs,o.hours,o.visitDay,isVisited(o)?"Yes":"No",lastVisit(o)?fmtDate(lastVisit(o)):"",(o.visits&&o.visits.length)||0,(o.visits&&o.visits.length)?o.visits.map(fmtDate).join(" | "):"",o.notes].map(q).join(",")));
+  rows.forEach(o=>lines.push([o.name,o.addr,o.city,"IL",o.zip,o.lat,o.lng,o.county||"",o.phone,o.email,o.scanner,o.lab||"",o.drs,o.hours,o.visitDay,isVisited(o)?"Yes":"No",o.active===false?"Inactive":"Active",lastVisit(o)?fmtDate(lastVisit(o)):"",lastColor(o)?VLABEL[lastColor(o)]:"",(o.visits&&o.visits.length)||0,(o.visits&&o.visits.length)?o.visits.map(v=>fmtDate(v.date)+(v.color?" ("+VLABEL[v.color]+")":"")).join(" | "):"",o.notes].map(q).join(",")));
   return {csv:lines.join("\r\n"),count:rows.length};
 }
 function downloadCSV(onlyVisited){
@@ -1120,9 +1234,9 @@ function openExport(){
     <div style="margin-top:16px;padding:13px;background:var(--amber-wash);border-radius:11px;font-size:12.5px;color:var(--ink-soft);line-height:1.5;">
       <b>iPhone tip:</b> "Share" opens the iOS share sheet — pick Mail to send the file straight to your marketing team, or AirDrop it. If sharing isn't available, the file downloads to Files and Mail opens for you to attach it.
     </div>`;
-  document.getElementById('ex_share').onclick=()=>{hideSheet();setTimeout(emailCSV,250);};
-  document.getElementById('ex_visited').onclick=()=>{downloadCSV(true);};
-  document.getElementById('ex_all').onclick=()=>{downloadCSV(false);};
+  const exShare=document.getElementById('ex_share'); if(exShare) exShare.onclick=()=>{hideSheet();setTimeout(emailCSV,250);};
+  const exVis=document.getElementById('ex_visited'); if(exVis) exVis.onclick=()=>{downloadCSV(true);};
+  const exAll=document.getElementById('ex_all'); if(exAll) exAll.onclick=()=>{downloadCSV(false);};
   showSheet();
 }
 
@@ -1242,14 +1356,16 @@ function openSync(){
       <button class="btn btn-ghost" id="sy_copy" style="margin-top:8px;">Copy script</button>
       <div style="font-size:11.5px;color:var(--amber);margin-top:8px;">Note: "Anyone" access means anyone with the link can read &amp; edit (what you asked for). The marketing team can also open the Sheet directly. For a private team, add a password layer later.</div>
     </details>`;
-  document.getElementById('sy_copy').onclick=()=>{
-    const ta=document.getElementById('sy_code'); ta.select();
+  const copyBtn=document.getElementById('sy_copy');
+  if(copyBtn) copyBtn.onclick=()=>{
+    const ta=document.getElementById('sy_code'); if(ta)ta.select();
     try{document.execCommand('copy');toast("Script copied");}catch(e){
       try{navigator.clipboard.writeText(gsScript);toast("Script copied");}catch(_){toast("Select and copy manually");}
     }
   };
-  document.getElementById('sy_save').onclick=async()=>{
-    const u=document.getElementById('sy_url').value.trim();
+  const saveBtn=document.getElementById('sy_save');
+  if(saveBtn) saveBtn.onclick=async()=>{
+    const uEl=document.getElementById('sy_url'); const u=uEl?uEl.value.trim():"";
     if(!u){toast("Paste your Web App URL");return;}
     if(!/^https:\/\/script\.google\.com\/.*\/exec/.test(u)){toast("That doesn't look like an /exec URL");return;}
     pulling=false; pushing=false;            // clear any stuck locks
@@ -1277,7 +1393,8 @@ function openSync(){
     rebuild(); render(); setSyncBadge();
     toast("Synced");
   };
-  document.getElementById('sy_off').onclick=()=>{
+  const offBtn=document.getElementById('sy_off');
+  if(offBtn) offBtn.onclick=()=>{
     cloudSaveConfig(""); cloudOn=false; cloudUnsubscribe();
     pulling=false; pushing=false;
     setSyncBadge(); hideSheet(); toast("Team sync turned off");
