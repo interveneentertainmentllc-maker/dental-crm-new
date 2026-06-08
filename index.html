@@ -873,7 +873,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v35";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v36";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1453,7 +1453,7 @@ function openSync(){
     '    for(var k=0;k<incoming.length;k++){ if(String(incoming[k][COLS.indexOf("visited")]).trim().toLowerCase()==="deleted") explicitDeletes++; }',
     '    var after=order.length;',
     '    if(before-after > Math.max(explicitDeletes,0)){ return out_("refused: would remove unexplained rows"); }',
-    '    if(before>0 && after===0 && explicitDeletes < before){ return out_("refused: would empty sheet"); }',
+    '    if(before>0 && after===0){ return out_("refused: would empty sheet"); }',
     '    var write=order.map(function(id){return map[id];});',
     '    var lastNow=sh.getLastRow();',
     '    if(lastNow>1) sh.getRange(2,1,lastNow-1,COLS.length).clearContent();',
