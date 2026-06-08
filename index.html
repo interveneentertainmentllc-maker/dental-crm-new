@@ -191,7 +191,10 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .subchip{font-family:inherit;font-size:13px;padding:7px 13px;border:1.5px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap;}
 .subchip.on{background:var(--teal);color:#fff;border-color:var(--teal);}
 .fchip{font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);white-space:nowrap;flex-shrink:0;}
+.fchip:focus{outline:none;}
+.fchip:focus-visible{outline:none;}
 .fchip.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
+.fchip.expanded{background:var(--surface);color:var(--teal-deep);border-color:var(--teal-deep);box-shadow:inset 0 0 0 1px var(--teal-deep);}
 .loading{text-align:center;padding:70px 20px;color:var(--ink-faint);font-family:var(--mono);font-size:13px;}
 
 /* ---------- Map view ---------- */
@@ -807,11 +810,11 @@ function renderInner(){
   document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x.getAttribute('data-f')===state.filter));
   // the two expandable trigger chips highlight when their panel is open OR active
   const cd=document.getElementById('chip_dates');
-  if(cd) cd.classList.toggle('on', state.expand==="dates" || ["d7","d30","drange"].indexOf(state.filter)>=0);
+  if(cd){ cd.classList.toggle('on', ["d7","d30","drange"].indexOf(state.filter)>=0); cd.classList.toggle('expanded', state.expand==="dates"); }
   const cr=document.getElementById('chip_reps');
-  if(cr) cr.classList.toggle('on', state.expand==="reps" || !!state.repFilter);
+  if(cr){ cr.classList.toggle('on', !!state.repFilter); cr.classList.toggle('expanded', state.expand==="reps"); }
   const cs=document.getElementById('chip_status');
-  if(cs) cs.classList.toggle('on', state.expand==="status" || ["cgreen","cyellow","cred"].indexOf(state.filter)>=0);
+  if(cs){ cs.classList.toggle('on', ["cgreen","cyellow","cred"].indexOf(state.filter)>=0); cs.classList.toggle('expanded', state.expand==="status"); }
 
   // ----- Dates panel: 7d / 30d / custom range + calendar, all inline -----
   const drb=document.getElementById('daterangebar');
@@ -873,7 +876,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v36";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v37";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1678,7 +1681,8 @@ function wire(){
     if(!b)return;
     state.filter=b.getAttribute('data-f');
     state.expand="";                 // choosing a normal chip collapses any open panel
-    document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));
+    document.querySelectorAll('.fchip').forEach(x=>{x.classList.toggle('on',x===b);x.classList.remove('expanded');});
+    if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
     render();requestAnimationFrame(render);
   });
   // autosave safety on hide/blur
