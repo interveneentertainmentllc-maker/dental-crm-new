@@ -225,6 +225,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .userdot{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 4px rgba(26,115,232,.25),0 2px 6px rgba(0,0,0,.3);}
 .nearby-toggle{position:absolute;bottom:calc(var(--safe-bottom) + 90px);left:14px;z-index:600;background:var(--teal-deep);color:#fff;border-radius:24px;padding:11px 16px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:none;align-items:center;gap:7px;}
 .nearby-toggle.show{display:flex;}
+.route-btn{position:absolute;bottom:calc(var(--safe-bottom) + 140px);left:14px;z-index:600;background:var(--amber);color:#fff;border:none;border-radius:24px;padding:11px 16px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:7px;cursor:pointer;}
 .pin{background:var(--teal);width:16px;height:16px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3);}
 .pin.visited{background:var(--green);}
 .pin.scanner{background:var(--amber);}
@@ -284,6 +285,10 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
   <button class="nearby-toggle" id="nearbyBtn">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg>
     <span id="nearbyLabel">Nearest 25</span>
+  </button>
+  <button class="route-btn" id="routeBtn">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M6 16.5V9a4 4 0 014-4h4M18 7.5V9"/></svg>
+    <span>Route</span>
   </button>
 </div>
 </div>
@@ -876,7 +881,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v37";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v40";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -934,6 +939,39 @@ function haversine(lat1,lng1,lat2,lng2){
   const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
+// Order offices nearest-next ("greedy") starting from a given point.
+// Not a perfect shortest-path, but a sensible drive order that cuts backtracking.
+function routeOrder(offices, startLat, startLng){
+  const pts=offices.filter(o=>o.lat&&o.lng).map(o=>({o,lat:+o.lat,lng:+o.lng}));
+  const out=[]; let cLat=startLat, cLng=startLng;
+  const pool=pts.slice();
+  while(pool.length){
+    let bi=0, bd=Infinity;
+    for(let i=0;i<pool.length;i++){ const d=haversine(cLat,cLng,pool[i].lat,pool[i].lng); if(d<bd){bd=d;bi=i;} }
+    const next=pool.splice(bi,1)[0];
+    out.push(next.o); cLat=next.lat; cLng=next.lng;
+  }
+  return out;
+}
+// Apple Maps multi-stop: daddr supports "to:" chained waypoints.
+function routeAppleURL(ordered, startLat, startLng){
+  if(!ordered.length) return "";
+  const dests=ordered.map(o=>o.lat+","+o.lng);
+  const daddr=dests.join("+to:");
+  const saddr=(startLat!=null&&startLng!=null)?(startLat+","+startLng):"";
+  return "https://maps.apple.com/?"+(saddr?("saddr="+encodeURIComponent(saddr)+"&"):"")+"daddr="+encodeURIComponent(daddr)+"&dirflg=d";
+}
+// Google Maps multi-stop via the directions API URL (origin + destination + waypoints).
+function routeGoogleURL(ordered, startLat, startLng){
+  if(!ordered.length) return "";
+  const coords=ordered.map(o=>o.lat+","+o.lng);
+  const origin=(startLat!=null&&startLng!=null)?(startLat+","+startLng):coords[0];
+  const destination=coords[coords.length-1];
+  const mid=(startLat!=null&&startLng!=null)?coords.slice(0,-1):coords.slice(1,-1);
+  let url="https://www.google.com/maps/dir/?api=1&origin="+encodeURIComponent(origin)+"&destination="+encodeURIComponent(destination)+"&travelmode=driving";
+  if(mid.length) url+="&waypoints="+encodeURIComponent(mid.join("|"));
+  return url;
+}
 function buildMap(){
   if(mapBuilt) return;
   mapObj=L.map('map',{zoomControl:true,tap:true}).setView([41.85,-87.85],10);
@@ -953,7 +991,7 @@ function popupHTML(o){
     ? `<div class="popup-note"><div class="pnl">Notes</div>${esc(o.notes)}</div>`
     : '';
   return `<div class="popup-nm">${esc(o.name)}</div>
-    <div class="popup-ad">${esc(o.addr)}, ${esc(o.city)}</div>
+    <a class="popup-ad" href="${mapAppleLink(o)}" target="_blank" rel="noopener" style="text-decoration:none;display:block;">${esc(o.addr)}, ${esc(o.city)}</a>
     ${dist}
     ${scOn?`<span class="popup-sc">${esc(o.scanner)}</span>`:''}
     ${noteBlock}
@@ -1087,7 +1125,7 @@ function openDetail(id){
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> Apple Maps</a>
     </div>
     <div class="dgrid">
-      <div class="dcard full"><div class="dl">Address</div><div class="dv">${esc(o.addr)}, ${esc(o.city)}, IL ${esc(o.zip)}</div></div>
+      <div class="dcard full"><div class="dl">Address</div><a class="dv" href="${mapAppleLink(o)}" target="_blank" rel="noopener">${esc(o.addr)}, ${esc(o.city)}, IL ${esc(o.zip)}</a></div>
       <div class="dcard"><div class="dl">Phone</div>${o.phone?`<a class="dv" href="tel:${esc(o.phone)}">${esc(o.phone)}</a>`:'<div class="dv" style="color:var(--ink-faint)">—</div>'}</div>
       <div class="dcard"><div class="dl">Email</div>${o.email?`<a class="dv" href="mailto:${esc(o.email)}">${esc(o.email)}</a>`:'<div class="dv" style="color:var(--ink-faint)">—</div>'}</div>
       <div class="dcard"><div class="dl">Scanner</div><div class="dv" style="${scOn?'color:var(--teal)':''}">${esc(o.scanner)||'—'}</div></div>
@@ -1354,6 +1392,62 @@ function emailCSV(){
     const body=encodeURIComponent(`${count} visited dental offices attached (downloaded as CSV — please attach the file).\n\nGenerated by IL Dental CRM.`);
     location.href=`mailto:?subject=${encodeURIComponent('IL Dental CRM — Visited Offices ('+count+')')}&body=${body}`;
   }
+}
+function openRoute(){
+  // Route is built from whatever is currently filtered (city/status/rep/etc).
+  const set=DB.filter(matchFilter).filter(o=>o.lat&&o.lng);
+  document.getElementById('sheetTitle').textContent="Build Route";
+  if(!set.length){
+    document.getElementById('sheetBody').innerHTML=`<p style="color:var(--ink-soft);font-size:14px;line-height:1.5;">No mappable offices in the current filter. Pick a city, status, or rep first, then build a route.</p>`;
+    showSheet(); return;
+  }
+  const haveGPS=!!userPos;
+  const maxN=Math.min(set.length,25);
+  const defN=Math.min(set.length,9);
+  let nOpts="";
+  for(let n=2;n<=maxN;n++){ nOpts+=`<option value="${n}"${n===defN?' selected':''}>${n} stops${n>10?' — apps may drop some':''}</option>`; }
+  // "Start from" options: GPS (if known) + each office as a possible first stop.
+  const sorted=set.slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
+  let startOpts="";
+  if(haveGPS) startOpts+=`<option value="__gps__" selected>My current location</option>`;
+  sorted.forEach(o=>{ startOpts+=`<option value="${esc(o.id)}"${(!haveGPS&&o.id===sorted[0].id)?' selected':''}>${esc(o.name||'(no name)')} — ${esc(o.city||'')}</option>`; });
+  document.getElementById('sheetBody').innerHTML=`
+    <p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5;margin-bottom:14px;">
+      ${set.length} office${set.length>1?'s':''} in the current filter, ordered nearest-next to cut backtracking.</p>
+    <div class="fld"><label>Start from</label>
+      <select id="rt_start">${startOpts}</select></div>
+    <div class="fld"><label>How many stops?</label>
+      <select id="rt_n">${nOpts}</select></div>
+    <p style="color:var(--ink-faint);font-size:12px;line-height:1.45;margin:8px 0 16px;">Pick your first office to plan a day within a city, or start from your current location. Maps apps reliably handle up to ~9–10 stops; above that some may be dropped.</p>
+    <div id="rt_list" style="margin-bottom:16px;"></div>
+    <button class="btn btn-primary" id="rt_apple" style="width:100%;margin-bottom:9px;">Open in Apple Maps</button>
+    <button class="btn" id="rt_google" style="width:100%;background:var(--teal-wash);color:var(--teal-deep);">Open in Google Maps</button>`;
+  function refresh(){
+    const n=parseInt(document.getElementById('rt_n').value,10)||defN;
+    const startVal=document.getElementById('rt_start').value;
+    let ordered, sLat=null, sLng=null;
+    if(startVal==="__gps__" && haveGPS){
+      sLat=userPos.lat; sLng=userPos.lng;
+      ordered=routeOrder(set, sLat, sLng).slice(0,n);
+    } else {
+      // start from a chosen office: it's stop #1, rest ordered nearest-next from it
+      const first=set.find(o=>o.id===startVal) || set[0];
+      const rest=set.filter(o=>o.id!==first.id);
+      ordered=[first].concat(routeOrder(rest, +first.lat, +first.lng)).slice(0,n);
+      // no separate start point — the first office IS the origin
+    }
+    const list=document.getElementById('rt_list');
+    list.innerHTML=ordered.map((o,i)=>`<div style="display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);">
+      <span style="font-family:var(--mono);font-weight:700;color:var(--amber);min-width:20px;">${i+1}</span>
+      <span style="font-size:13.5px;"><b>${esc(o.name||'(no name)')}</b> <span style="color:var(--ink-soft)">— ${esc(o.city||'')}</span></span></div>`).join('');
+    const aBtn=document.getElementById('rt_apple'), gBtn=document.getElementById('rt_google');
+    aBtn.onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u){window.open(u,'_blank');} };
+    gBtn.onclick=()=>{ const u=routeGoogleURL(ordered,sLat,sLng); if(u){window.open(u,'_blank');} };
+  }
+  document.getElementById('rt_n').onchange=refresh;
+  document.getElementById('rt_start').onchange=refresh;
+  refresh();
+  showSheet();
 }
 function openExport(){
   document.getElementById('sheetTitle').textContent="Export / Share";
@@ -1669,6 +1763,7 @@ function wire(){
   on('btnView','click',()=>setView(state.view==="map"?"list":"map"));
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
+  on('routeBtn','click',openRoute);
   on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
   on('sheetX','click',hideSheet);
   on('sheetBg','click',hideSheet);
