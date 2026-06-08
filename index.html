@@ -187,6 +187,9 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .daterangebar label{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-right:4px;}
 .daterangebar input[type=date]{font-family:var(--mono);font-size:13px;padding:7px 9px;border:1.5px solid var(--line-strong);border-radius:9px;background:var(--surface);color:var(--ink);}
 .daterangebar .drclear{font-size:12px;color:var(--teal);background:none;border:none;padding:6px;cursor:pointer;}
+.caret{font-size:9px;opacity:.7;}
+.subchip{font-family:inherit;font-size:13px;padding:7px 13px;border:1.5px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap;}
+.subchip.on{background:var(--teal);color:#fff;border-color:var(--teal);}
 .fchip{font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);white-space:nowrap;flex-shrink:0;}
 .fchip.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
 .loading{text-align:center;padding:70px 20px;color:var(--ink-faint);font-family:var(--mono);font-size:13px;}
@@ -261,16 +264,15 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
   <button class="fchip" data-f="notes">Has notes</button>
   <button class="fchip" data-f="mine">Mine</button>
   <button class="fchip" data-f="custom">My added</button>
-  <button class="fchip" data-f="d7">Visited ≤7d</button>
-  <button class="fchip" data-f="d30">Visited ≤30d</button>
-  <button class="fchip" data-f="drange">Date range</button>
+  <button class="fchip" id="chip_dates" data-expand="dates">Visited… <span class="caret">▾</span></button>
+  <button class="fchip" id="chip_reps" data-expand="reps">By Rep <span class="caret">▾</span></button>
   <button class="fchip" data-f="active">Active</button>
   <button class="fchip" data-f="inactive">Inactive</button>
-  <button class="fchip" data-f="cgreen"><span class="vdot" style="background:#2f7d3f"></span>Good</button>
-  <button class="fchip" data-f="cyellow"><span class="vdot" style="background:#bf9b16"></span>Okay</button>
-  <button class="fchip" data-f="cred"><span class="vdot" style="background:#b3402f"></span>Poor</button>
+  <button class="fchip" id="chip_status" data-expand="status">Status… <span class="caret">▾</span></button>
 </div>
 <div class="daterangebar" id="daterangebar" style="display:none;"></div>
+<div class="daterangebar" id="repbar" style="display:none;"></div>
+<div class="daterangebar" id="statusbar" style="display:none;"></div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
   <button class="locate-btn" id="locateBtn" aria-label="Find my location">
@@ -330,7 +332,7 @@ function loadMe(){
 }
 function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.setItem(ME_KEY,id);}catch(e){} }
 function isAdmin(){ return !!(ME&&ME.role==="admin"); }
-function meName(){ return ME?ME.name:""; }
+function meName(){ return ME?String(ME.name||"").replace(/\s+/g," ").trim():""; }
 function repTerritory(){ return ME?(ME.territory||""):""; }
 
 /* ---------- shared cloud sync (Google Sheets via Apps Script) ----------
@@ -578,7 +580,7 @@ function cloudSaveConfig(url){
   try{localStorage.setItem(GS_CFG_KEY,JSON.stringify({url:GS_URL}));}catch(e){}
 }
 
-let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list",dFrom:"",dTo:""};
+let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list",dFrom:"",dTo:"",expand:"",repFilter:""};
 let mapObj=null, clusterLayer=null, mapBuilt=false;
 let userPos=null, userMarker=null, nearbyMode=false;
 const NEARBY_N=25;
@@ -771,6 +773,8 @@ function matchFilter(o){
   if(state.filter==="notes"&&!o.notes)return false;
   if(state.filter==="custom"&&o.seed)return false;
   if(state.filter==="mine"&&!isMine(o))return false;
+  if(state.repFilter){ const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
+    if(!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn)))return false; }
   if(state.filter==="d7"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=7))return false;
   if(state.filter==="d30"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=30))return false;
   if(state.filter==="drange"){
@@ -800,28 +804,76 @@ function render(){
 }
 function renderInner(){
   // keep the filter chips' highlight in sync with the real filter state
-  // (a background sync re-render must never leave them disagreeing)
   document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x.getAttribute('data-f')===state.filter));
-  // date-range inputs appear only when the "Date range" filter is active
+  // the two expandable trigger chips highlight when their panel is open OR active
+  const cd=document.getElementById('chip_dates');
+  if(cd) cd.classList.toggle('on', state.expand==="dates" || ["d7","d30","drange"].indexOf(state.filter)>=0);
+  const cr=document.getElementById('chip_reps');
+  if(cr) cr.classList.toggle('on', state.expand==="reps" || !!state.repFilter);
+  const cs=document.getElementById('chip_status');
+  if(cs) cs.classList.toggle('on', state.expand==="status" || ["cgreen","cyellow","cred"].indexOf(state.filter)>=0);
+
+  // ----- Dates panel: 7d / 30d / custom range + calendar, all inline -----
   const drb=document.getElementById('daterangebar');
   if(drb){
-    if(state.filter==="drange"){
+    if(state.expand==="dates"){
       drb.style.display="flex";
-      if(drb.getAttribute('data-built')!=="1"){
-        drb.innerHTML=`<label>From</label><input type="date" id="dr_from" value="${esc(state.dFrom)}">
-          <label>To</label><input type="date" id="dr_to" value="${esc(state.dTo)}">
-          <button class="drclear" id="dr_clear">Clear</button>`;
-        drb.setAttribute('data-built','1');
-        document.getElementById('dr_from').onchange=e=>{state.dFrom=e.target.value;render();};
-        document.getElementById('dr_to').onchange=e=>{state.dTo=e.target.value;render();};
-        const drClear=document.getElementById('dr_clear'); if(drClear) drClear.onclick=()=>{state.dFrom="";state.dTo="";const a=document.getElementById('dr_from'),b=document.getElementById('dr_to');if(a)a.value="";if(b)b.value="";render();};
-      }
-    } else { drb.style.display="none"; drb.setAttribute('data-built',"0"); drb.innerHTML=""; }
+      const on=f=>state.filter===f?' on':'';
+      drb.innerHTML=`
+        <button class="subchip${on('d7')}" data-df="d7">Last 7 days</button>
+        <button class="subchip${on('d30')}" data-df="d30">Last 30 days</button>
+        <button class="subchip${on('drange')}" data-df="drange">Custom range</button>
+        ${state.filter==="drange"?`<label>From</label><input type="date" id="dr_from" value="${esc(state.dFrom)}">
+          <label>To</label><input type="date" id="dr_to" value="${esc(state.dTo)}">`:''}
+        ${(["d7","d30","drange"].indexOf(state.filter)>=0)?`<button class="drclear" id="dr_clear">Clear</button>`:''}`;
+      drb.querySelectorAll('[data-df]').forEach(b=>{ b.onclick=()=>{
+        const f=b.getAttribute('data-df');
+        state.filter=(state.filter===f && f!=="drange")?"all":f;   // toggle off 7/30; range stays to show pickers
+        render();
+      };});
+      const a=document.getElementById('dr_from'); if(a) a.onchange=e=>{state.dFrom=e.target.value;render();};
+      const bb=document.getElementById('dr_to'); if(bb) bb.onchange=e=>{state.dTo=e.target.value;render();};
+      const drClear=document.getElementById('dr_clear'); if(drClear) drClear.onclick=()=>{state.filter="all";state.dFrom="";state.dTo="";render();};
+    } else { drb.style.display="none"; drb.innerHTML=""; }
+  }
+
+  // ----- Reps panel: All + one chip per rep, from the registry -----
+  const rpb=document.getElementById('repbar');
+  if(rpb){
+    if(state.expand==="reps"){
+      rpb.style.display="flex";
+      const allOn=state.repFilter===""?' on':'';
+      const chips=[`<button class="subchip${allOn}" data-rep="">All reps</button>`]
+        .concat((REPS||[]).map(r=>`<button class="subchip${state.repFilter.toLowerCase()===r.name.toLowerCase()?' on':''}" data-rep="${esc(r.name)}">${esc(r.name)}</button>`));
+      rpb.innerHTML=chips.join('');
+      rpb.querySelectorAll('[data-rep]').forEach(b=>{ b.onclick=()=>{ state.repFilter=b.getAttribute('data-rep')||""; render(); };});
+    } else { rpb.style.display="none"; rpb.innerHTML=""; }
+  }
+
+  // ----- Status panel: Good / Okay / Poor (latest visit color) -----
+  const stb=document.getElementById('statusbar');
+  if(stb){
+    if(state.expand==="status"){
+      stb.style.display="flex";
+      const on=f=>state.filter===f?' on':'';
+      const dot=c=>`<span class="vdot" style="background:${c}"></span>`;
+      stb.innerHTML=`
+        <button class="subchip${on('cgreen')}" data-st="cgreen">${dot(VCOLORS.green)}Good</button>
+        <button class="subchip${on('cyellow')}" data-st="cyellow">${dot(VCOLORS.yellow)}Okay</button>
+        <button class="subchip${on('cred')}" data-st="cred">${dot(VCOLORS.red)}Poor</button>
+        ${(["cgreen","cyellow","cred"].indexOf(state.filter)>=0)?`<button class="drclear" id="st_clear">Clear</button>`:''}`;
+      stb.querySelectorAll('[data-st]').forEach(b=>{ b.onclick=()=>{
+        const f=b.getAttribute('data-st');
+        state.filter=(state.filter===f)?"all":f;   // toggle off if already selected
+        render();
+      };});
+      const stClear=document.getElementById('st_clear'); if(stClear) stClear.onclick=()=>{state.filter="all";render();};
+    } else { stb.style.display="none"; stb.innerHTML=""; }
   }
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v32";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v35";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1619,7 +1671,16 @@ function wire(){
   on('sheetBg','click',hideSheet);
   let st;
   on('search','input',e=>{clearTimeout(st);st=setTimeout(()=>{state.q=e.target.value.trim();render();},180);});
-  on('filterbar','click',e=>{const b=e.target.closest('[data-f]');if(!b)return;state.filter=b.getAttribute('data-f');document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));render();requestAnimationFrame(render);});
+  on('filterbar','click',e=>{
+    const ex=e.target.closest('[data-expand]');
+    if(ex){ const which=ex.getAttribute('data-expand'); state.expand=(state.expand===which)?"":which; render(); return; }
+    const b=e.target.closest('[data-f]');
+    if(!b)return;
+    state.filter=b.getAttribute('data-f');
+    state.expand="";                 // choosing a normal chip collapses any open panel
+    document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x===b));
+    render();requestAnimationFrame(render);
+  });
   // autosave safety on hide/blur
   window.addEventListener('beforeunload',()=>{try{save(true);}catch(e){}});
   window.addEventListener('pagehide',()=>{try{save(true);}catch(e){}});
