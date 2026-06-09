@@ -799,6 +799,29 @@ function matchFilter(o){
     if(!(S(o.name).includes(q)||S(o.city).includes(q)||S(o.addr).includes(q)||S(o.drs).includes(q)||S(o.lab).includes(q)||S(o.zip).includes(q)))return false;}
   return true;
 }
+// For anchor-mode routing: apply only the status/rep/visited filters, NOT the
+// city tab or search text (the anchor office defines location, so the pool is
+// location-agnostic but still honors any status/rep narrowing the user set).
+function poolMatch(o){
+  const f=state.filter;
+  if(f==="visited"&&!isVisited(o))return false;
+  if(f==="unvisited"&&isVisited(o))return false;
+  if(f==="scanner"&&!(o.scanner&&o.scanner!=="None"&&o.scanner!==""))return false;
+  if(f==="notes"&&!o.notes)return false;
+  if(f==="custom"&&o.seed)return false;
+  if(f==="mine"&&!isMine(o))return false;
+  if(f==="active"&&o.active===false)return false;
+  if(f==="inactive"&&o.active!==false)return false;
+  if(f==="cgreen"&&lastColor(o)!=="green")return false;
+  if(f==="cyellow"&&lastColor(o)!=="yellow")return false;
+  if(f==="cred"&&lastColor(o)!=="red")return false;
+  if(f==="d7"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=7))return false;
+  if(f==="d30"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=30))return false;
+  if(f==="drange"){const lv=lastVisit(o);if(!lv)return false;if(state.dFrom&&lv<state.dFrom)return false;if(state.dTo&&lv>state.dTo)return false;}
+  if(state.repFilter){const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
+    if(!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn)))return false;}
+  return true;
+}
 
 /* ---------- render ---------- */
 function render(){
@@ -881,7 +904,7 @@ function renderInner(){
   const filtered=DB.filter(matchFilter);
   // stats
   const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v40";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
@@ -1394,59 +1417,97 @@ function emailCSV(){
   }
 }
 function openRoute(){
-  // Route is built from whatever is currently filtered (city/status/rep/etc).
-  const set=DB.filter(matchFilter).filter(o=>o.lat&&o.lng);
+  // Two ways to route:
+  //  (A) anchor on a specific office (searchable) -> route nearest-next from it,
+  //      drawing from ALL offices that match active status/rep filters (location-agnostic).
+  //  (B) no anchor -> route the current on-screen filter, starting from GPS.
+  const curSet=DB.filter(matchFilter).filter(o=>o.lat&&o.lng);
   document.getElementById('sheetTitle').textContent="Build Route";
-  if(!set.length){
-    document.getElementById('sheetBody').innerHTML=`<p style="color:var(--ink-soft);font-size:14px;line-height:1.5;">No mappable offices in the current filter. Pick a city, status, or rep first, then build a route.</p>`;
-    showSheet(); return;
-  }
   const haveGPS=!!userPos;
-  const maxN=Math.min(set.length,25);
-  const defN=Math.min(set.length,9);
-  let nOpts="";
-  for(let n=2;n<=maxN;n++){ nOpts+=`<option value="${n}"${n===defN?' selected':''}>${n} stops${n>10?' — apps may drop some':''}</option>`; }
-  // "Start from" options: GPS (if known) + each office as a possible first stop.
-  const sorted=set.slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
-  let startOpts="";
-  if(haveGPS) startOpts+=`<option value="__gps__" selected>My current location</option>`;
-  sorted.forEach(o=>{ startOpts+=`<option value="${esc(o.id)}"${(!haveGPS&&o.id===sorted[0].id)?' selected':''}>${esc(o.name||'(no name)')} — ${esc(o.city||'')}</option>`; });
+  let anchorId=null;           // chosen anchor office id (anchor mode) or null
+  let stopN=9;
+
   document.getElementById('sheetBody').innerHTML=`
-    <p style="color:var(--ink-soft);font-size:13.5px;line-height:1.5;margin-bottom:14px;">
-      ${set.length} office${set.length>1?'s':''} in the current filter, ordered nearest-next to cut backtracking.</p>
-    <div class="fld"><label>Start from</label>
-      <select id="rt_start">${startOpts}</select></div>
+    <div class="fld"><label>Start from a specific office</label>
+      <input type="text" id="rt_search" placeholder="Type an office name…" autocomplete="off" style="width:100%;">
+      <div id="rt_results" style="margin-top:6px;"></div>
+      <div id="rt_anchor" style="margin-top:6px;"></div>
+    </div>
+    <div id="rt_gpsnote" style="font-size:12px;color:var(--ink-faint);line-height:1.45;margin:2px 0 14px;"></div>
     <div class="fld"><label>How many stops?</label>
-      <select id="rt_n">${nOpts}</select></div>
-    <p style="color:var(--ink-faint);font-size:12px;line-height:1.45;margin:8px 0 16px;">Pick your first office to plan a day within a city, or start from your current location. Maps apps reliably handle up to ~9–10 stops; above that some may be dropped.</p>
+      <select id="rt_n"></select></div>
+    <p style="color:var(--ink-faint);font-size:12px;line-height:1.45;margin:8px 0 16px;">Search an office to anchor the route there (stop #1) — it then fills in the nearest offices around it. Any Status/Rep filter still applies to the pool. Maps apps reliably handle ~9–10 stops; above that some may be dropped.</p>
     <div id="rt_list" style="margin-bottom:16px;"></div>
     <button class="btn btn-primary" id="rt_apple" style="width:100%;margin-bottom:9px;">Open in Apple Maps</button>
     <button class="btn" id="rt_google" style="width:100%;background:var(--teal-wash);color:var(--teal-deep);">Open in Google Maps</button>`;
-  function refresh(){
-    const n=parseInt(document.getElementById('rt_n').value,10)||defN;
-    const startVal=document.getElementById('rt_start').value;
-    let ordered, sLat=null, sLng=null;
-    if(startVal==="__gps__" && haveGPS){
-      sLat=userPos.lat; sLng=userPos.lng;
-      ordered=routeOrder(set, sLat, sLng).slice(0,n);
-    } else {
-      // start from a chosen office: it's stop #1, rest ordered nearest-next from it
-      const first=set.find(o=>o.id===startVal) || set[0];
-      const rest=set.filter(o=>o.id!==first.id);
-      ordered=[first].concat(routeOrder(rest, +first.lat, +first.lng)).slice(0,n);
-      // no separate start point — the first office IS the origin
-    }
-    const list=document.getElementById('rt_list');
-    list.innerHTML=ordered.map((o,i)=>`<div style="display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);">
-      <span style="font-family:var(--mono);font-weight:700;color:var(--amber);min-width:20px;">${i+1}</span>
-      <span style="font-size:13.5px;"><b>${esc(o.name||'(no name)')}</b> <span style="color:var(--ink-soft)">— ${esc(o.city||'')}</span></span></div>`).join('');
-    const aBtn=document.getElementById('rt_apple'), gBtn=document.getElementById('rt_google');
-    aBtn.onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u){window.open(u,'_blank');} };
-    gBtn.onclick=()=>{ const u=routeGoogleURL(ordered,sLat,sLng); if(u){window.open(u,'_blank');} };
+
+  const $=id=>document.getElementById(id);
+
+  function currentPool(){
+    if(anchorId) return DB.filter(poolMatch).filter(o=>o.lat&&o.lng);
+    return curSet;
   }
-  document.getElementById('rt_n').onchange=refresh;
-  document.getElementById('rt_start').onchange=refresh;
-  refresh();
+  function rebuildStopOptions(poolLen){
+    const maxN=Math.min(Math.max(poolLen,2),25);
+    const sel=$('rt_n'); const prev=stopN;
+    let html="";
+    for(let n=2;n<=maxN;n++){ html+=`<option value="${n}">${n} stops${n>10?' — apps may drop some':''}</option>`; }
+    sel.innerHTML=html;
+    stopN=Math.min(prev,maxN); if(stopN<2)stopN=Math.min(2,maxN); sel.value=String(stopN);
+  }
+  function computeOrdered(){
+    const pool=currentPool();
+    if(anchorId){
+      const anchor=DB.find(o=>o.id===anchorId);
+      if(!anchor||!anchor.lat||!anchor.lng) return [];
+      const rest=pool.filter(o=>o.id!==anchorId);
+      return [anchor].concat(routeOrder(rest, +anchor.lat, +anchor.lng)).slice(0,stopN);
+    }
+    if(haveGPS) return routeOrder(pool, userPos.lat, userPos.lng).slice(0,stopN);
+    if(!pool.length) return [];
+    return routeOrder(pool, +pool[0].lat, +pool[0].lng).slice(0,stopN);
+  }
+  function renderRoute(){
+    rebuildStopOptions(currentPool().length);
+    const ordered=computeOrdered();
+    const sLat=(!anchorId&&haveGPS)?userPos.lat:null;
+    const sLng=(!anchorId&&haveGPS)?userPos.lng:null;
+    $('rt_list').innerHTML=ordered.length?ordered.map((o,i)=>`<div style="display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);">
+      <span style="font-family:var(--mono);font-weight:700;color:var(--amber);min-width:20px;">${i+1}</span>
+      <span style="font-size:13.5px;"><b>${esc(o.name||'(no name)')}</b> <span style="color:var(--ink-soft)">— ${esc(o.city||'')}</span></span></div>`).join('')
+      :`<p style="color:var(--ink-soft);font-size:13px;">No mappable offices to route. Pick an anchor office or adjust your filters.</p>`;
+    $('rt_gpsnote').textContent = anchorId
+      ? "Routing from your chosen office through the nearest offices around it."
+      : (haveGPS?"Routing from your current location. Or search an office above to anchor the route there."
+                :"Tip: tap the locate button on the map to start from where you are, or search an office above to anchor the route.");
+    $('rt_apple').onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u)window.open(u,'_blank'); };
+    $('rt_google').onclick=()=>{ const u=routeGoogleURL(ordered,sLat,sLng); if(u)window.open(u,'_blank'); };
+  }
+  function showAnchorChip(){
+    const a=anchorId?DB.find(o=>o.id===anchorId):null;
+    $('rt_anchor').innerHTML = a
+      ? `<span class="subchip on" style="display:inline-flex;align-items:center;gap:7px;">Anchor: ${esc(a.name||'(no name)')} — ${esc(a.city||'')} <span id="rt_clear" style="cursor:pointer;font-weight:700;">✕</span></span>`
+      : "";
+    const clr=$('rt_clear'); if(clr) clr.onclick=()=>{ anchorId=null; $('rt_search').value=""; $('rt_results').innerHTML=""; showAnchorChip(); renderRoute(); };
+  }
+  $('rt_search').oninput=()=>{
+    const q=$('rt_search').value.toLowerCase().trim();
+    const box=$('rt_results');
+    if(q.length<2){ box.innerHTML=""; return; }
+    const S=v=>(v==null?"":String(v)).toLowerCase();
+    const hits=DB.filter(o=>o.lat&&o.lng&&(S(o.name).includes(q)||S(o.city).includes(q)||S(o.addr).includes(q))).slice(0,8);
+    box.innerHTML=hits.length?hits.map(o=>`<div class="rt-hit" data-id="${esc(o.id)}" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:5px;cursor:pointer;font-size:13.5px;"><b>${esc(o.name||'(no name)')}</b> <span style="color:var(--ink-soft)">— ${esc(o.city||'')}</span></div>`).join('')
+      :`<div style="font-size:13px;color:var(--ink-soft);padding:6px 2px;">No matches.</div>`;
+    box.querySelectorAll('.rt-hit').forEach(el=>{ el.onclick=()=>{
+      anchorId=el.getAttribute('data-id');
+      $('rt_search').value=""; box.innerHTML="";
+      showAnchorChip(); renderRoute();
+    };});
+  };
+  $('rt_n').onchange=()=>{ stopN=parseInt($('rt_n').value,10)||9; renderRoute(); };
+
+  showAnchorChip();
+  renderRoute();
   showSheet();
 }
 function openExport(){
