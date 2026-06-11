@@ -194,6 +194,39 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .fchip:focus{outline:none;}
 .fchip:focus-visible{outline:none;}
 .fchip.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
+/* ---- grouped control card (priority filters) ---- */
+.ctrlwrap{padding:11px 14px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);}
+.iconrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
+.ficon svg{width:15px;height:15px;flex:0 0 auto;}
+.ficon .cv{font-size:9px;opacity:.6;transition:transform .15s;}
+.ficon.open .cv{transform:rotate(180deg);}
+.ficon:focus,.ficon:focus-visible{outline:none;}
+.ficon.act{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
+.ficon.g.act{background:var(--green);border-color:var(--green);}
+.ficon.h.act{background:var(--amber);border-color:var(--amber);}
+.exppanel{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:9px;padding:11px 12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;}
+.segset{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+.seg{font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:999px;background:var(--surface-2);color:var(--ink-soft);border:1px solid #e8e3d7;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
+.seg:focus,.seg:focus-visible{outline:none;}
+.seg.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
+.heatset{display:flex;gap:9px;justify-content:center;}
+.heat{font-family:inherit;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink);padding:8px 16px;border-radius:999px;background:var(--surface-2);border:1px solid #e8e3d7;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s,border-color .12s;}
+.heat:focus,.heat:focus-visible{outline:none;}
+.heat .hd{width:11px;height:11px;border-radius:50%;flex:0 0 auto;}
+.heat b{font-family:var(--mono);font-size:13px;font-weight:700;}
+.heat.on{background:var(--teal-deep);border-color:var(--teal-deep);}
+.heat.on b{color:#fff;}
+.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.morebtn .cv{font-size:9px;opacity:.6;transition:transform .15s;}
+.morebtn.open .cv{transform:rotate(180deg);}
+.morebtn:focus,.morebtn:focus-visible{outline:none;}
+.moredrawer{display:flex;flex-wrap:wrap;gap:7px;align-items:center;justify-content:center;margin-top:9px;padding:11px 12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;}
+.moredivide{width:100%;height:0;border-top:1px dashed var(--line);margin:3px 0;}
+.morelabel{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);}
+.clearwrap{display:flex;justify-content:center;margin-top:9px;height:0;overflow:hidden;transition:height .15s;}
+.clearwrap.show{height:auto;margin-top:10px;}
+.clearbtn{font-family:inherit;font-size:12px;font-weight:600;color:var(--teal);background:none;border:none;cursor:pointer;padding:3px 8px;}
 .fchip.expanded{background:var(--surface);color:var(--teal-deep);border-color:var(--teal-deep);box-shadow:inset 0 0 0 1px var(--teal-deep);}
 .loading{text-align:center;padding:70px 20px;color:var(--ink-faint);font-family:var(--mono);font-size:13px;}
 
@@ -260,23 +293,47 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
   </div>
 </header>
 <div class="statbar" id="statbar"></div>
-<div class="filterbar" id="filterbar">
-  <button class="fchip on" data-f="all">All</button>
-  <button class="fchip" data-f="visited">Visited</button>
-  <button class="fchip" data-f="unvisited">Not visited</button>
-  <button class="fchip" data-f="scanner">Has scanner</button>
-  <button class="fchip" data-f="notes">Has notes</button>
-  <button class="fchip" data-f="mine">Mine</button>
-  <button class="fchip" data-f="custom">My added</button>
-  <button class="fchip" id="chip_dates" data-expand="dates">Visited… <span class="caret">▾</span></button>
-  <button class="fchip" id="chip_reps" data-expand="reps">By Rep <span class="caret">▾</span></button>
-  <button class="fchip" data-f="active">Active</button>
-  <button class="fchip" data-f="inactive">Inactive</button>
-  <button class="fchip" id="chip_status" data-expand="status">Status… <span class="caret">▾</span></button>
+<div class="ctrlwrap" id="filterbar">
+  <div class="iconrow">
+    <button class="ficon" data-grp="visit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+      <span>Visit</span><span class="cv">▾</span>
+    </button>
+    <button class="ficon g" data-grp="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>
+      <span>Status</span><span class="cv">▾</span>
+    </button>
+    <button class="ficon h" data-grp="heat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2c1 4 5 5 5 9a5 5 0 01-10 0c0-1 .5-2 1-3 .5 2 2 2 2 0 0-2-1-3 2-6z"/></svg>
+      <span>Heat</span><span class="cv">▾</span>
+    </button>
+    <button class="morebtn" id="moreBtn">More <span class="cv">▾</span></button>
+  </div>
+
+  <div class="exppanel" id="exp_visit" style="display:none;">
+    <div class="segset" id="seg_visit">
+      <button class="seg" data-gv="visited">Visited</button>
+      <button class="seg" data-gv="unvisited">Not visited</button>
+      <button class="seg" data-gv="mine">Mine</button>
+    </div>
+  </div>
+  <div class="exppanel" id="exp_status" style="display:none;">
+    <div class="segset" id="seg_status">
+      <button class="seg" data-gs="active">Active</button>
+      <button class="seg" data-gs="inactive">Inactive</button>
+    </div>
+  </div>
+  <div class="exppanel" id="exp_heat" style="display:none;">
+    <div class="heatset" id="seg_heat">
+      <button class="heat" data-gh="green" aria-label="Good"><span class="hd" style="background:var(--green)"></span><b id="hc_green">0</b></button>
+      <button class="heat" data-gh="yellow" aria-label="Okay"><span class="hd" style="background:#bf9b16"></span><b id="hc_yellow">0</b></button>
+      <button class="heat" data-gh="red" aria-label="Poor"><span class="hd" style="background:var(--danger)"></span><b id="hc_red">0</b></button>
+    </div>
+  </div>
+
+  <div class="moredrawer" id="moreDrawer" style="display:none;"></div>
+  <div class="clearwrap"><button class="clearbtn" id="clearBtn">Clear all filters</button></div>
 </div>
-<div class="daterangebar" id="daterangebar" style="display:none;"></div>
-<div class="daterangebar" id="repbar" style="display:none;"></div>
-<div class="daterangebar" id="statusbar" style="display:none;"></div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
   <button class="locate-btn" id="locateBtn" aria-label="Find my location">
@@ -333,7 +390,7 @@ function loadReps(){
 }
 function saveReps(){ try{localStorage.setItem(REPS_KEY,JSON.stringify(REPS));}catch(e){} }
 function repById(id){ return REPS.find(r=>r.id===id)||null; }
-function repByName(n){ if(!n)return null; n=String(n).toLowerCase().trim(); return REPS.find(r=>r.name.toLowerCase()===n)||null; }
+function repByName(n){ if(!n)return null; n=String(n).toLowerCase().trim(); return REPS.find(r=>String((r&&r.name)||"").toLowerCase()===n)||null; }
 function loadMe(){
   try{const id=localStorage.getItem(ME_KEY); ME=id?repById(id):null;}catch(e){ME=null;}
   if(ME && !repById(ME.id)) ME=null;
@@ -588,7 +645,12 @@ function cloudSaveConfig(url){
   try{localStorage.setItem(GS_CFG_KEY,JSON.stringify({url:GS_URL}));}catch(e){}
 }
 
-let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list",dFrom:"",dTo:"",expand:"",repFilter:""};
+let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list",dFrom:"",dTo:"",expand:"",repFilter:"",
+  gVisit:"",        // "" | "visited" | "unvisited" | "mine"  (stackable group)
+  gStatus:"",       // "" | "active" | "inactive"            (stackable group)
+  gHeat:[],         // subset of ["green","yellow","red"] — OR within the group
+  openGroups:[],    // which icon panels are expanded: subset of ["visit","status","heat"]
+  showMore:false};  // secondary-filter drawer open?
 let mapObj=null, clusterLayer=null, mapBuilt=false;
 let userPos=null, userMarker=null, nearbyMode=false;
 const NEARBY_N=25;
@@ -599,7 +661,7 @@ let undoStack=[];
 function load(){ try{const r=localStorage.getItem(SK); if(r)store=JSON.parse(r);}catch(e){} if(!store.over)store.over={}; if(!store.add)store.add=[]; if(!store.del)store.del=[]; }
 function save(silent){ try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){toast("⚠️ Save failed (storage full?)");return;} if(cloudOn){cloudPush(true).then(()=>{try{setSyncBadge();}catch(e){}});} if(!silent)toast(cloudOn?"Saved & syncing":"Saved");}
 function pushUndo(label){ undoStack.push({snap:JSON.stringify(store),label}); if(undoStack.length>40)undoStack.shift(); }
-function doUndo(){ if(!undoStack.length){toast("Nothing to undo");return;} const u=undoStack.pop(); store=JSON.parse(u.snap); save(true); rebuild(); render(); toast("Reverted: "+u.label); }
+function doUndo(){ if(!undoStack.length){toast("Nothing to undo");return;} const u=undoStack.pop(); let snap=null; try{ snap=JSON.parse(u.snap); }catch(e){} if(!snap||typeof snap!=="object"){ toast("Couldn't undo (snapshot unreadable)"); return; } store=snap; if(!store.over)store.over={}; if(!store.add)store.add=[]; if(!store.del)store.del=[]; save(true); rebuild(); render(); toast("Reverted: "+u.label); }
 
 /* ---------- decompress seed ---------- */
 // Pure-JS gzip/DEFLATE inflate (tiny-inflate by Joergen Ibsen / Devon Govett,
@@ -774,52 +836,48 @@ function isMine(o){
   if((o.addedBy||"").toLowerCase()===me.toLowerCase())return true;
   return !!(o.visits&&o.visits.some(v=>(v.rep||"").toLowerCase()===me.toLowerCase()));
 }
+// Shared: do the three stackable priority groups pass for this office?
+// They AND together; within Heat the selected colors OR together.
+function groupsPass(o){
+  if(state.gVisit==="visited"&&!isVisited(o))return false;
+  if(state.gVisit==="unvisited"&&isVisited(o))return false;
+  if(state.gVisit==="mine"&&!isMine(o))return false;
+  if(state.gStatus==="active"&&o.active===false)return false;
+  if(state.gStatus==="inactive"&&o.active!==false)return false;
+  if(state.gHeat&&state.gHeat.length){ if(state.gHeat.indexOf(lastColor(o))<0)return false; }
+  return true;
+}
+// Secondary single-filters live in the "More" drawer (scanner/notes/custom/dates).
+function secondaryPass(o){
+  const f=state.filter;
+  if(f==="scanner"&&!(o.scanner&&o.scanner!=="None"&&o.scanner!==""))return false;
+  if(f==="notes"&&!o.notes)return false;
+  if(f==="custom"&&o.seed)return false;
+  if(f==="d7"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=7))return false;
+  if(f==="d30"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=30))return false;
+  if(f==="drange"){ const lv=lastVisit(o); if(!lv)return false;
+    if(state.dFrom&&lv<state.dFrom)return false; if(state.dTo&&lv>state.dTo)return false; }
+  return true;
+}
+function repPass(o){
+  if(!state.repFilter)return true;
+  const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
+  return !!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn));
+}
 function matchFilter(o){
-  if(state.filter==="visited"&&!isVisited(o))return false;
-  if(state.filter==="unvisited"&&isVisited(o))return false;
-  if(state.filter==="scanner"&&!(o.scanner&&o.scanner!=="None"&&o.scanner!==""))return false;
-  if(state.filter==="notes"&&!o.notes)return false;
-  if(state.filter==="custom"&&o.seed)return false;
-  if(state.filter==="mine"&&!isMine(o))return false;
-  if(state.repFilter){ const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
-    if(!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn)))return false; }
-  if(state.filter==="d7"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=7))return false;
-  if(state.filter==="d30"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=30))return false;
-  if(state.filter==="drange"){
-    const lv=lastVisit(o); if(!lv)return false;
-    if(state.dFrom&&lv<state.dFrom)return false;
-    if(state.dTo&&lv>state.dTo)return false;
-  }
-  if(state.filter==="active"&&o.active===false)return false;
-  if(state.filter==="inactive"&&o.active!==false)return false;
-  if(state.filter==="cgreen"&&lastColor(o)!=="green")return false;
-  if(state.filter==="cyellow"&&lastColor(o)!=="yellow")return false;
-  if(state.filter==="cred"&&lastColor(o)!=="red")return false;
+  if(!groupsPass(o))return false;
+  if(!secondaryPass(o))return false;
+  if(!repPass(o))return false;
   if(state.q){const q=state.q.toLowerCase();const S=v=>(v==null?"":String(v)).toLowerCase();
     if(!(S(o.name).includes(q)||S(o.city).includes(q)||S(o.addr).includes(q)||S(o.drs).includes(q)||S(o.lab).includes(q)||S(o.zip).includes(q)))return false;}
   return true;
 }
-// For anchor-mode routing: apply only the status/rep/visited filters, NOT the
-// city tab or search text (the anchor office defines location, so the pool is
-// location-agnostic but still honors any status/rep narrowing the user set).
+// For anchor-mode routing: apply the priority groups + status/rep narrowing,
+// NOT the city tab or search text (the anchor office defines location).
 function poolMatch(o){
-  const f=state.filter;
-  if(f==="visited"&&!isVisited(o))return false;
-  if(f==="unvisited"&&isVisited(o))return false;
-  if(f==="scanner"&&!(o.scanner&&o.scanner!=="None"&&o.scanner!==""))return false;
-  if(f==="notes"&&!o.notes)return false;
-  if(f==="custom"&&o.seed)return false;
-  if(f==="mine"&&!isMine(o))return false;
-  if(f==="active"&&o.active===false)return false;
-  if(f==="inactive"&&o.active!==false)return false;
-  if(f==="cgreen"&&lastColor(o)!=="green")return false;
-  if(f==="cyellow"&&lastColor(o)!=="yellow")return false;
-  if(f==="cred"&&lastColor(o)!=="red")return false;
-  if(f==="d7"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=7))return false;
-  if(f==="d30"&&!(lastVisit(o)&&daysAgo(lastVisit(o))<=30))return false;
-  if(f==="drange"){const lv=lastVisit(o);if(!lv)return false;if(state.dFrom&&lv<state.dFrom)return false;if(state.dTo&&lv>state.dTo)return false;}
-  if(state.repFilter){const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
-    if(!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn)))return false;}
+  if(!groupsPass(o))return false;
+  if(!secondaryPass(o))return false;
+  if(!repPass(o))return false;
   return true;
 }
 
@@ -827,6 +885,7 @@ function poolMatch(o){
 function render(){
   try{ renderInner(); }
   catch(err){
+    try{ console.error("renderInner failed:", err); }catch(_){}
     try{
       const m=document.getElementById('main');
       if(m) m.innerHTML='<div class="empty"><h3>Couldn\'t display the list</h3><p>Try clearing the search or switching filters. Your data is safe.</p></div>';
@@ -834,72 +893,63 @@ function render(){
   }
 }
 function renderInner(){
-  // keep the filter chips' highlight in sync with the real filter state
-  document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('on',x.getAttribute('data-f')===state.filter));
-  // the two expandable trigger chips highlight when their panel is open OR active
-  const cd=document.getElementById('chip_dates');
-  if(cd){ cd.classList.toggle('on', ["d7","d30","drange"].indexOf(state.filter)>=0); cd.classList.toggle('expanded', state.expand==="dates"); }
-  const cr=document.getElementById('chip_reps');
-  if(cr){ cr.classList.toggle('on', !!state.repFilter); cr.classList.toggle('expanded', state.expand==="reps"); }
-  const cs=document.getElementById('chip_status');
-  if(cs){ cs.classList.toggle('on', ["cgreen","cyellow","cred"].indexOf(state.filter)>=0); cs.classList.toggle('expanded', state.expand==="status"); }
+  // ----- sync the icon row: active fills + open panels -----
+  const grpActive={visit:!!state.gVisit, status:!!state.gStatus, heat:state.gHeat.length>0};
+  document.querySelectorAll('.ficon[data-grp]').forEach(b=>{
+    const g=b.getAttribute('data-grp');
+    b.classList.toggle('act', !!grpActive[g]);
+    b.classList.toggle('open', state.openGroups.indexOf(g)>=0);
+  });
+  ['visit','status','heat'].forEach(g=>{
+    const panel=document.getElementById('exp_'+g);
+    if(panel) panel.style.display = state.openGroups.indexOf(g)>=0 ? 'flex' : 'none';
+  });
+  // ----- sync the option toggles inside the panels -----
+  const sv=document.getElementById('seg_visit');
+  if(sv) sv.querySelectorAll('[data-gv]').forEach(b=>b.classList.toggle('on',b.getAttribute('data-gv')===state.gVisit));
+  const ss=document.getElementById('seg_status');
+  if(ss) ss.querySelectorAll('[data-gs]').forEach(b=>b.classList.toggle('on',b.getAttribute('data-gs')===state.gStatus));
+  const sh=document.getElementById('seg_heat');
+  if(sh) sh.querySelectorAll('[data-gh]').forEach(b=>b.classList.toggle('on',state.gHeat.indexOf(b.getAttribute('data-gh'))>=0));
 
-  // ----- Dates panel: 7d / 30d / custom range + calendar, all inline -----
-  const drb=document.getElementById('daterangebar');
-  if(drb){
-    if(state.expand==="dates"){
-      drb.style.display="flex";
+  // live heat counts: react to the OTHER active filters (everything except heat itself)
+  const heatBase=DB.filter(o=>{
+    const savedHeat=state.gHeat; state.gHeat=[];        // ignore heat so the dials show what heat WOULD narrow
+    const ok=matchFilter(o); state.gHeat=savedHeat; return ok;
+  });
+  const hc={green:0,yellow:0,red:0};
+  heatBase.forEach(o=>{ const c=lastColor(o); if(c in hc) hc[c]++; });
+  const setHc=(id,n)=>{ const el=document.getElementById(id); if(el) el.textContent=n.toLocaleString(); };
+  setHc('hc_green',hc.green); setHc('hc_yellow',hc.yellow); setHc('hc_red',hc.red);
+
+  // "Clear all" visible only when something is active
+  const anyActive=!!(state.gVisit||state.gStatus||state.gHeat.length||(state.filter&&state.filter!=="all")||state.repFilter||state.q);
+  const clrWrap=document.querySelector('.clearwrap'); if(clrWrap) clrWrap.classList.toggle('show',anyActive);
+  const moreBtn=document.getElementById('moreBtn'); if(moreBtn) moreBtn.classList.toggle('open',state.showMore);
+
+  // ----- More drawer: secondary filters (scanner/notes/added), By Rep, Dates -----
+  const drawer=document.getElementById('moreDrawer');
+  if(drawer){
+    if(state.showMore){
+      drawer.style.display="flex";
       const on=f=>state.filter===f?' on':'';
-      drb.innerHTML=`
-        <button class="subchip${on('d7')}" data-df="d7">Last 7 days</button>
-        <button class="subchip${on('d30')}" data-df="d30">Last 30 days</button>
-        <button class="subchip${on('drange')}" data-df="drange">Custom range</button>
-        ${state.filter==="drange"?`<label>From</label><input type="date" id="dr_from" value="${esc(state.dFrom)}">
-          <label>To</label><input type="date" id="dr_to" value="${esc(state.dTo)}">`:''}
-        ${(["d7","d30","drange"].indexOf(state.filter)>=0)?`<button class="drclear" id="dr_clear">Clear</button>`:''}`;
-      drb.querySelectorAll('[data-df]').forEach(b=>{ b.onclick=()=>{
-        const f=b.getAttribute('data-df');
-        state.filter=(state.filter===f && f!=="drange")?"all":f;   // toggle off 7/30; range stays to show pickers
-        render();
-      };});
+      const rf=String(state.repFilter||"").toLowerCase();
+      const repChips=(REPS||[]).map(r=>{ const nm=String((r&&r.name)||""); return `<button class="subchip${rf===nm.toLowerCase()?' on':''}" data-rep="${esc(nm)}">${esc(nm)}</button>`; }).join('');
+      drawer.innerHTML=`
+        <button class="subchip${on('scanner')}" data-f="scanner">Has scanner</button>
+        <button class="subchip${on('notes')}" data-f="notes">Has notes</button>
+        <button class="subchip${on('custom')}" data-f="custom">My added</button>
+        <span class="moredivide"></span>
+        <button class="subchip${on('d7')}" data-f="d7">Last 7 days</button>
+        <button class="subchip${on('d30')}" data-f="d30">Last 30 days</button>
+        <button class="subchip${on('drange')}" data-f="drange">Date range</button>
+        ${state.filter==="drange"?`<label>From</label><input type="date" id="dr_from" value="${esc(state.dFrom)}"><label>To</label><input type="date" id="dr_to" value="${esc(state.dTo)}">`:''}
+        ${REPS&&REPS.length?`<span class="moredivide"></span><span class="morelabel">Rep</span><button class="subchip${rf===""?' on':''}" data-rep="">All</button>${repChips}`:''}`;
+      drawer.querySelectorAll('[data-f]').forEach(b=>{ b.onclick=()=>{ const f=b.getAttribute('data-f'); state.filter=(state.filter===f && f!=="drange")?"all":f; render(); }; });
+      drawer.querySelectorAll('[data-rep]').forEach(b=>{ b.onclick=()=>{ state.repFilter=b.getAttribute('data-rep')||""; render(); }; });
       const a=document.getElementById('dr_from'); if(a) a.onchange=e=>{state.dFrom=e.target.value;render();};
       const bb=document.getElementById('dr_to'); if(bb) bb.onchange=e=>{state.dTo=e.target.value;render();};
-      const drClear=document.getElementById('dr_clear'); if(drClear) drClear.onclick=()=>{state.filter="all";state.dFrom="";state.dTo="";render();};
-    } else { drb.style.display="none"; drb.innerHTML=""; }
-  }
-
-  // ----- Reps panel: All + one chip per rep, from the registry -----
-  const rpb=document.getElementById('repbar');
-  if(rpb){
-    if(state.expand==="reps"){
-      rpb.style.display="flex";
-      const allOn=state.repFilter===""?' on':'';
-      const chips=[`<button class="subchip${allOn}" data-rep="">All reps</button>`]
-        .concat((REPS||[]).map(r=>`<button class="subchip${state.repFilter.toLowerCase()===r.name.toLowerCase()?' on':''}" data-rep="${esc(r.name)}">${esc(r.name)}</button>`));
-      rpb.innerHTML=chips.join('');
-      rpb.querySelectorAll('[data-rep]').forEach(b=>{ b.onclick=()=>{ state.repFilter=b.getAttribute('data-rep')||""; render(); };});
-    } else { rpb.style.display="none"; rpb.innerHTML=""; }
-  }
-
-  // ----- Status panel: Good / Okay / Poor (latest visit color) -----
-  const stb=document.getElementById('statusbar');
-  if(stb){
-    if(state.expand==="status"){
-      stb.style.display="flex";
-      const on=f=>state.filter===f?' on':'';
-      const dot=c=>`<span class="vdot" style="background:${c}"></span>`;
-      stb.innerHTML=`
-        <button class="subchip${on('cgreen')}" data-st="cgreen">${dot(VCOLORS.green)}Good</button>
-        <button class="subchip${on('cyellow')}" data-st="cyellow">${dot(VCOLORS.yellow)}Okay</button>
-        <button class="subchip${on('cred')}" data-st="cred">${dot(VCOLORS.red)}Poor</button>
-        ${(["cgreen","cyellow","cred"].indexOf(state.filter)>=0)?`<button class="drclear" id="st_clear">Clear</button>`:''}`;
-      stb.querySelectorAll('[data-st]').forEach(b=>{ b.onclick=()=>{
-        const f=b.getAttribute('data-st');
-        state.filter=(state.filter===f)?"all":f;   // toggle off if already selected
-        render();
-      };});
-      const stClear=document.getElementById('st_clear'); if(stClear) stClear.onclick=()=>{state.filter="all";render();};
-    } else { stb.style.display="none"; stb.innerHTML=""; }
+    } else { drawer.style.display="none"; drawer.innerHTML=""; }
   }
   const filtered=DB.filter(matchFilter);
   // stats
@@ -984,14 +1034,24 @@ function routeAppleURL(ordered, startLat, startLng){
   const saddr=(startLat!=null&&startLng!=null)?(startLat+","+startLng):"";
   return "https://maps.apple.com/?"+(saddr?("saddr="+encodeURIComponent(saddr)+"&"):"")+"daddr="+encodeURIComponent(daddr)+"&dirflg=d";
 }
-// Google Maps multi-stop via the directions API URL (origin + destination + waypoints).
+// Google Maps multi-stop. Match Apple's behavior: when we DON'T have the rep's
+// GPS, leave the origin EMPTY so Google Maps fills in the device's current
+// location (exactly like Apple omits saddr). When we DO have GPS, use it as
+// the explicit origin. The earlier offices become waypoints and the last is
+// the destination.
 function routeGoogleURL(ordered, startLat, startLng){
   if(!ordered.length) return "";
   const coords=ordered.map(o=>o.lat+","+o.lng);
-  const origin=(startLat!=null&&startLng!=null)?(startLat+","+startLng):coords[0];
+  const origin=(startLat!=null&&startLng!=null)?(startLat+","+startLng):"";   // "" -> Google uses current location
   const destination=coords[coords.length-1];
-  const mid=(startLat!=null&&startLng!=null)?coords.slice(0,-1):coords.slice(1,-1);
-  let url="https://www.google.com/maps/dir/?api=1&origin="+encodeURIComponent(origin)+"&destination="+encodeURIComponent(destination)+"&travelmode=driving";
+  // With or without a GPS origin, every office except the final destination is
+  // a waypoint. (No GPS: the trip starts at the user's location, then visits
+  // office #1, #2, … with the last office as the destination.)
+  const mid=coords.slice(0,-1);
+  let url="https://www.google.com/maps/dir/?api=1"
+        + (origin?("&origin="+encodeURIComponent(origin)):"")
+        + "&destination="+encodeURIComponent(destination)
+        + "&travelmode=driving";
   if(mid.length) url+="&waypoints="+encodeURIComponent(mid.join("|"));
   return url;
 }
@@ -1045,7 +1105,14 @@ function wirePopup(e){
 }
 function refreshMap(filtered){
   buildMap();
-  setTimeout(()=>mapObj.invalidateSize(),60);
+  // Recalculate the map's size reliably. A single fixed 60ms timeout can fire
+  // BEFORE mobile Safari finishes laying out the (previously display:none) map
+  // container, so Leaflet measures the wrong size and tiles render grey/blank
+  // until a manual refresh. Instead invalidate on the next animation frame
+  // (layout settled) and again on short backstops to cover slow layouts.
+  const fixSize=()=>{ if(mapObj){ try{ mapObj.invalidateSize(false); }catch(e){} } };
+  requestAnimationFrame(()=>{ fixSize(); requestAnimationFrame(fixSize); });
+  setTimeout(fixSize,120); setTimeout(fixSize,350);
   clusterLayer.clearLayers();
   let pts=filtered.filter(o=>o.lat&&o.lng);
   // nearby mode: restrict to N closest to the user
@@ -1796,7 +1863,7 @@ function openManageReps(){
 }
 
 function showSheet(){document.body.classList.add('sheet-open');document.getElementById('sheetBg').classList.add('show');document.getElementById('sheet').classList.add('show');}
-function hideSheet(){document.body.classList.remove('sheet-open');document.getElementById('sheetBg').classList.remove('show');document.getElementById('sheet').classList.remove('show');}
+function hideSheet(){document.body.classList.remove('sheet-open');document.getElementById('sheetBg').classList.remove('show');document.getElementById('sheet').classList.remove('show');if(state.view==="map"&&mapObj){requestAnimationFrame(()=>{try{mapObj.invalidateSize(false);}catch(e){}});}}
 
 /* ---------- events ---------- */
 function wire(){
@@ -1831,15 +1898,27 @@ function wire(){
   let st;
   on('search','input',e=>{clearTimeout(st);st=setTimeout(()=>{state.q=e.target.value.trim();render();},180);});
   on('filterbar','click',e=>{
-    const ex=e.target.closest('[data-expand]');
-    if(ex){ const which=ex.getAttribute('data-expand'); state.expand=(state.expand===which)?"":which; render(); return; }
-    const b=e.target.closest('[data-f]');
-    if(!b)return;
-    state.filter=b.getAttribute('data-f');
-    state.expand="";                 // choosing a normal chip collapses any open panel
-    document.querySelectorAll('.fchip').forEach(x=>{x.classList.toggle('on',x===b);x.classList.remove('expanded');});
-    if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
-    render();requestAnimationFrame(render);
+    // Icon row — expand/collapse a group's panel (multiple can stay open)
+    const fi=e.target.closest('.ficon[data-grp]');
+    if(fi){ const g=fi.getAttribute('data-grp'); const i=state.openGroups.indexOf(g);
+      if(i>=0) state.openGroups.splice(i,1); else state.openGroups.push(g); render(); return; }
+    // Visit group — exclusive within the group; tap the active one again to clear
+    const gv=e.target.closest('[data-gv]');
+    if(gv){ const v=gv.getAttribute('data-gv'); state.gVisit=(state.gVisit===v)?"":v; render(); return; }
+    // Status group — exclusive; tap again to clear
+    const gs=e.target.closest('[data-gs]');
+    if(gs){ const v=gs.getAttribute('data-gs'); state.gStatus=(state.gStatus===v)?"":v; render(); return; }
+    // Heat group — multi-select (toggle each color in/out of the set)
+    const gh=e.target.closest('[data-gh]');
+    if(gh){ const c=gh.getAttribute('data-gh'); const i=state.gHeat.indexOf(c);
+      if(i>=0) state.gHeat.splice(i,1); else state.gHeat.push(c); render(); return; }
+    // More drawer toggle
+    if(e.target.closest('#moreBtn')){ state.showMore=!state.showMore; render(); return; }
+    // Clear all
+    if(e.target.closest('#clearBtn')){
+      state.gVisit=""; state.gStatus=""; state.gHeat=[]; state.filter="all";
+      state.repFilter=""; state.dFrom=""; state.dTo=""; render(); return;
+    }
   });
   // autosave safety on hide/blur
   window.addEventListener('beforeunload',()=>{try{save(true);}catch(e){}});
