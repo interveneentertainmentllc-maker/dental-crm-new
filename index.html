@@ -2077,7 +2077,13 @@ function wire(){
   window.addEventListener('beforeunload',()=>{try{save(true);}catch(e){}});
   window.addEventListener('pagehide',()=>{try{save(true);}catch(e){}});
   document.addEventListener('visibilitychange',async ()=>{
-    if(document.hidden||!cloudOn) return;
+    if(document.hidden) return;
+    // Coming back to the foreground: if we're on the map but tracking stopped
+    // (iOS pauses watchPosition when backgrounded), resume following.
+    if(state.view==="map" && !followMode){
+      setTimeout(()=>{ try{ if(state.view==="map" && !followMode) startFollow(); }catch(e){} }, 150);
+    }
+    if(!cloudOn) return;
     pulling=false; pushing=false;
     try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
     if(!pollTimer) cloudSubscribe();
@@ -2118,7 +2124,30 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
   setSyncBadge();
   updateMeBadge();
   if(!ME) setTimeout(openWhoAmI,400);   // first-open identity prompt
+
+  // ---- Startup: open straight to the map and begin following your location ----
+  // Runs on every launch / reopen / refresh. The map shows immediately; we then
+  // try to start GPS follow mode. iOS Safari may require a tap for the FIRST
+  // location permission, so if the auto-start can't get a fix we leave you on the
+  // map with the locate button ready (one tap then begins following).
+  startOnMapFollowing();
 })();
+
+// Open the map and kick off follow mode. Safe to call repeatedly.
+function startOnMapFollowing(){
+  try{
+    if(state.view!=="map") setView("map");
+    // Give the map container a beat to lay out, then start following.
+    setTimeout(()=>{ try{ if(!followMode) startFollow(); }catch(e){} }, 250);
+  }catch(e){}
+}
+
+// Re-assert map+follow when the app is brought back to the foreground (iOS
+// "reopen" from the home-screen icon often fires pageshow rather than a full
+// reload). Only re-follows if you'd been on the map.
+window.addEventListener('pageshow',(e)=>{
+  if(state.view==="map" && !followMode){ startOnMapFollowing(); }
+});
 </script>
 </body>
 </html>
