@@ -237,13 +237,22 @@ body.sheet-open #mapview{z-index:0;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
-.prox-banner{position:absolute;top:42px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:500;max-width:calc(100% - 28px);background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);padding:9px 14px;display:none;align-items:center;gap:10px;opacity:0;transition:opacity .2s,transform .2s;cursor:pointer;}
+.prox-banner{position:absolute;top:42px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:500;width:calc(100% - 28px);max-width:420px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s,transform .2s;overflow:hidden;}
 .prox-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0);}
+.prox-banner .pb-head{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;}
 .prox-banner .pbi{width:30px;height:30px;border-radius:9px;background:var(--teal-wash);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
-.prox-banner .pbt{min-width:0;line-height:1.25;}
+.prox-banner .pbt{min-width:0;line-height:1.25;flex:1 1 auto;}
 .prox-banner .pbn{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.prox-banner .pbd{font-size:11.5px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;}
+.prox-banner .pbd{font-size:11.5px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .prox-banner .pbd b{color:var(--teal-deep);}
+.prox-banner .pb-more{color:var(--teal-deep);font-weight:700;}
+.prox-banner .pb-list{border-top:1px solid var(--line);max-height:208px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
+.prox-banner .pr-row:last-child{border-bottom:none;}
+.prox-banner .pr-row:active{background:var(--teal-wash);}
+.prox-banner .pr-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+.prox-banner .pr-nm{flex:1 1 auto;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prox-banner .pr-ft{flex:0 0 auto;font-family:var(--mono);font-size:11.5px;color:var(--teal-deep);font-weight:700;}
 .leaflet-container{font-family:var(--sans);}
 .leaflet-popup-content-wrapper{border-radius:13px;box-shadow:var(--shadow-lg);}
 .leaflet-popup-content{margin:12px 14px;}
@@ -1269,26 +1278,82 @@ function fmtRadius(ft){
 }
 // Distance in feet for the banner readout.
 function feetBetween(lat1,lng1,lat2,lng2){ return Math.round(haversine(lat1,lng1,lat2,lng2)*5280); }
-// Live summary banner: "N nearby · nearest: Name (NNN ft)". Updates IN PLACE as
-// you drive (no pop-pop-pop). `tagged` is [{o,d(mi)}] already sorted nearest-first.
-// Tapping it opens the nearest office's detail.
+// Live summary banner: header shows the nearest office; tapping "+N more"
+// expands a short list of all in-range offices (each tappable -> opens profile).
+// While the list is open we FREEZE it (don't re-rank as you drive) so rows don't
+// shuffle under your finger; it resumes when collapsed.
 let _proxNearestId=null;
+let _proxOpen=false;        // is the expandable list showing?
+let _proxFrozen=null;       // frozen snapshot of [{o,d}] while the list is open
+function buildProxRow(o,ftDist){
+  const visited = isVisited(o);
+  const dot = `<span class="pr-dot" style="background:${visited?'var(--green)':'var(--line-strong)'}"></span>`;
+  return `<button class="pr-row" data-proxid="${esc(o.id)}">`+
+    `${dot}<span class="pr-nm">${esc(o.name||'(unnamed office)')}</span>`+
+    `<span class="pr-ft">${ftDist.toLocaleString()} ft</span></button>`;
+}
+function renderProxList(){
+  const list=document.getElementById('proxList'); if(!list) return;
+  if(!_proxOpen || !_proxFrozen || !_proxFrozen.length){ list.style.display="none"; list.innerHTML=""; return; }
+  list.style.display="block";
+  list.innerHTML=_proxFrozen.map(x=>{
+    const ft = userPos?feetBetween(userPos.lat,userPos.lng,x.o.lat,x.o.lng):Math.round(x.d*5280);
+    return buildProxRow(x.o,ft);
+  }).join('');
+  list.querySelectorAll('[data-proxid]').forEach(b=>{
+    b.onclick=(e)=>{ e.stopPropagation(); const id=b.getAttribute('data-proxid');
+      _proxOpen=false; _proxFrozen=null; renderProxList(); openDetail(id); };
+  });
+}
 function updateProxBanner(tagged){
   const bn=document.getElementById('proxBanner'); if(!bn) return;
   if(!followMode || !tagged || !tagged.length){
-    bn.classList.remove('show'); bn.innerHTML=""; _proxNearestId=null; return;
+    bn.classList.remove('show'); bn.innerHTML=""; _proxNearestId=null;
+    _proxOpen=false; _proxFrozen=null; return;
   }
-  const n=tagged.length;
-  const nearest=tagged[0].o;
+  // FAST PATH: if the list is already open and built, a GPS refresh must NOT
+  // rebuild the banner DOM (that would drop a tap on a row, same class of bug as
+  // the date picker). Just patch the header's live distance in place and return.
+  if(_proxOpen && _proxFrozen && document.getElementById('proxList') && bn._built){
+    const nearest=_proxFrozen[0].o;
+    const ft=userPos?feetBetween(userPos.lat,userPos.lng,nearest.lat,nearest.lng):0;
+    _proxNearestId=nearest.id;
+    const ftEl=bn.querySelector('.pbd b'); if(ftEl) ftEl.textContent=ft.toLocaleString()+" ft";
+    return;
+  }
+  // Use the frozen snapshot for ranking while open; otherwise live `tagged`.
+  const live = _proxOpen && _proxFrozen ? _proxFrozen : tagged;
+  const n=live.length;
+  const nearest=live[0].o;
   const ft=userPos?feetBetween(userPos.lat,userPos.lng,nearest.lat,nearest.lng):0;
   _proxNearestId=nearest.id;
-  const others = n>1 ? `<span style="color:var(--ink-faint)"> · +${n-1} more</span>` : "";
+  const moreTxt = n>1
+    ? `<span class="pb-more">${_proxOpen?'▲ less':'+'+(n-1)+' more'}</span>`
+    : "";
   bn.innerHTML=
-    `<span class="pbi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>`+
-    `<span class="pbt"><div class="pbn">${esc(nearest.name||'(unnamed office)')}</div>`+
-    `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}${others}</div></span>`;
+    `<div class="pb-head" id="pbHead">`+
+      `<span class="pbi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>`+
+      `<span class="pbt"><div class="pbn">${esc(nearest.name||'(unnamed office)')}</div>`+
+      `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}${n>1?' · ':''}${moreTxt}</div></span>`+
+    `</div>`+
+    `<div class="pb-list" id="proxList" style="display:none;"></div>`;
+  bn._built=true;
   bn.classList.add('show');
-  bn.onclick=()=>{ if(_proxNearestId) openDetail(_proxNearestId); };
+  // Header click: tapping the NAME opens the nearest; tapping "+N more"/"less" toggles list.
+  const head=document.getElementById('pbHead');
+  if(head) head.onclick=(e)=>{
+    const moreEl=e.target.closest('.pb-more');
+    if(moreEl && n>1){
+      _proxOpen=!_proxOpen;
+      _proxFrozen = _proxOpen ? tagged.slice() : null;   // freeze on open
+      bn._built=false;                                   // allow one structural rebuild for ▲/▼
+      updateProxBanner(_proxOpen?_proxFrozen:tagged);
+      renderProxList();
+      return;
+    }
+    if(_proxNearestId) openDetail(_proxNearestId);
+  };
+  renderProxList();
 }
 function drawUser(){
   if(!userPos||!mapObj) return;
