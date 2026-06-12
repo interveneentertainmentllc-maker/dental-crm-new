@@ -237,8 +237,8 @@ body.sheet-open #mapview{z-index:0;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
-.prox-banner{position:absolute;top:42px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:500;width:calc(100% - 28px);max-width:420px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s,transform .2s;overflow:hidden;}
-.prox-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0);}
+.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;}
 .prox-banner .pbi{width:30px;height:30px;border-radius:9px;background:var(--teal-wash);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
 .prox-banner .pbt{min-width:0;line-height:1.25;flex:1 1 auto;}
