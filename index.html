@@ -920,6 +920,13 @@ function render(){
     }catch(_){}
   }
 }
+// Re-filter and repaint the list/map WITHOUT rebuilding the More drawer, so an
+// open native date picker isn't destroyed mid-selection. Used by the date inputs.
+let _skipDrawerRebuild=false;
+function applyFilterOnly(){
+  _skipDrawerRebuild=true;
+  try{ render(); } finally { _skipDrawerRebuild=false; }
+}
 function renderInner(){
   // ----- sync the icon row: active fills + open panels -----
   const grpActive={visit:!!state.gVisit, status:!!state.gStatus, heat:state.gHeat.length>0};
@@ -960,24 +967,40 @@ function renderInner(){
   if(drawer){
     if(state.showMore){
       drawer.style.display="flex";
-      const on=f=>state.filter===f?' on':'';
-      const rf=String(state.repFilter||"").toLowerCase();
-      const repChips=(REPS||[]).map(r=>{ const nm=String((r&&r.name)||""); return `<button class="subchip${rf===nm.toLowerCase()?' on':''}" data-rep="${esc(nm)}">${esc(nm)}</button>`; }).join('');
-      drawer.innerHTML=`
-        <button class="subchip${on('scanner')}" data-f="scanner">Has scanner</button>
-        <button class="subchip${on('notes')}" data-f="notes">Has notes</button>
-        <button class="subchip${on('custom')}" data-f="custom">My added</button>
-        <span class="moredivide"></span>
-        <button class="subchip${on('d7')}" data-f="d7">Last 7 days</button>
-        <button class="subchip${on('d30')}" data-f="d30">Last 30 days</button>
-        <button class="subchip${on('drange')}" data-f="drange">Date range</button>
-        ${state.filter==="drange"?`<label>From</label><input type="date" id="dr_from" value="${esc(state.dFrom)}"><label>To</label><input type="date" id="dr_to" value="${esc(state.dTo)}">`:''}
-        ${REPS&&REPS.length?`<span class="moredivide"></span><span class="morelabel">Rep</span><button class="subchip${rf===""?' on':''}" data-rep="">All</button>${repChips}`:''}`;
-      drawer.querySelectorAll('[data-f]').forEach(b=>{ b.onclick=()=>{ const f=b.getAttribute('data-f'); state.filter=(state.filter===f && f!=="drange")?"all":f; render(); }; });
-      drawer.querySelectorAll('[data-rep]').forEach(b=>{ b.onclick=()=>{ state.repFilter=b.getAttribute('data-rep')||""; render(); }; });
-      const a=document.getElementById('dr_from'); if(a) a.onchange=e=>{state.dFrom=e.target.value;render();};
-      const bb=document.getElementById('dr_to'); if(bb) bb.onchange=e=>{state.dTo=e.target.value;render();};
-    } else { drawer.style.display="none"; drawer.innerHTML=""; }
+      // Build the drawer's HTML only when it's not already built for the current
+      // filter/rep state. Re-creating innerHTML on every render() (incl. the 15s
+      // sync poll and the date inputs' own onchange) was destroying the open
+      // native date picker mid-selection. We stamp a signature and skip rebuild
+      // when nothing the drawer shows has changed.
+      const sig=[state.filter,state.dFrom,state.dTo,state.repFilter,(REPS||[]).map(r=>r.name).join("|")].join("§");
+      // Never rebuild while explicitly skipping (date onchange) OR while a date
+      // input currently has focus / its picker is open — that would close it.
+      const ae=document.activeElement;
+      const dateFocused = ae && (ae.id==="dr_from" || ae.id==="dr_to");
+      if(drawer._sig!==sig && !_skipDrawerRebuild && !dateFocused){
+        drawer._sig=sig;
+        const on=f=>state.filter===f?' on':'';
+        const rf=String(state.repFilter||"").toLowerCase();
+        const repChips=(REPS||[]).map(r=>{ const nm=String((r&&r.name)||""); return `<button class="subchip${rf===nm.toLowerCase()?' on':''}" data-rep="${esc(nm)}">${esc(nm)}</button>`; }).join('');
+        drawer.innerHTML=`
+          <button class="subchip${on('scanner')}" data-f="scanner">Has scanner</button>
+          <button class="subchip${on('notes')}" data-f="notes">Has notes</button>
+          <button class="subchip${on('custom')}" data-f="custom">My added</button>
+          <span class="moredivide"></span>
+          <button class="subchip${on('d7')}" data-f="d7">Last 7 days</button>
+          <button class="subchip${on('d30')}" data-f="d30">Last 30 days</button>
+          <button class="subchip${on('drange')}" data-f="drange">Date range</button>
+          ${state.filter==="drange"?`<label>From</label><input type="date" id="dr_from" value="${esc(state.dFrom)}"><label>To</label><input type="date" id="dr_to" value="${esc(state.dTo)}">`:''}
+          ${REPS&&REPS.length?`<span class="moredivide"></span><span class="morelabel">Rep</span><button class="subchip${rf===""?' on':''}" data-rep="">All</button>${repChips}`:''}`;
+        drawer.querySelectorAll('[data-f]').forEach(b=>{ b.onclick=()=>{ const f=b.getAttribute('data-f'); state.filter=(state.filter===f && f!=="drange")?"all":f; render(); }; });
+        drawer.querySelectorAll('[data-rep]').forEach(b=>{ b.onclick=()=>{ state.repFilter=b.getAttribute('data-rep')||""; render(); }; });
+        // Date inputs: update state and RE-FILTER the list, but DON'T call render()
+        // (which would rebuild the drawer and close the picker). We refresh only
+        // the list/map directly and refresh the drawer signature in place.
+        const a=document.getElementById('dr_from'); if(a) a.onchange=e=>{ state.dFrom=e.target.value; drawer._sig=null; applyFilterOnly(); };
+        const bb=document.getElementById('dr_to'); if(bb) bb.onchange=e=>{ state.dTo=e.target.value; drawer._sig=null; applyFilterOnly(); };
+      }
+    } else { drawer.style.display="none"; drawer.innerHTML=""; drawer._sig=null; }
   }
   const filtered=DB.filter(matchFilter);
   // stats
