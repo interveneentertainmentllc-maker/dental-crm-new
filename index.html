@@ -237,6 +237,13 @@ body.sheet-open #mapview{z-index:0;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
+.prox-banner{position:absolute;top:42px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:500;max-width:calc(100% - 28px);background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);padding:9px 14px;display:none;align-items:center;gap:10px;opacity:0;transition:opacity .2s,transform .2s;cursor:pointer;}
+.prox-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0);}
+.prox-banner .pbi{width:30px;height:30px;border-radius:9px;background:var(--teal-wash);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.prox-banner .pbt{min-width:0;line-height:1.25;}
+.prox-banner .pbn{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prox-banner .pbd{font-size:11.5px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;}
+.prox-banner .pbd b{color:var(--teal-deep);}
 .leaflet-container{font-family:var(--sans);}
 .leaflet-popup-content-wrapper{border-radius:13px;box-shadow:var(--shadow-lg);}
 .leaflet-popup-content{margin:12px 14px;}
@@ -343,6 +350,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 </div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
+  <div class="prox-banner" id="proxBanner"></div>
   <div class="rad-ctrl" id="radCtrl">
     <button class="rad-btn" id="radMinus" aria-label="Smaller radius">−</button>
     <span class="rad-label" id="radLabel">1000 ft</span>
@@ -1202,9 +1210,13 @@ function refreshMap(filtered){
   // or a background sync never throws you back to a zoomed-out view.
   if(followMode && userPos){
     const radMi=FOLLOW_RADIUS_FT/5280;
-    pts=pts.filter(o=>haversine(userPos.lat,userPos.lng,o.lat,o.lng)<=radMi);
+    // distance-tag each in-range office so we can find the nearest for the banner
+    const tagged=pts.map(o=>({o,d:haversine(userPos.lat,userPos.lng,o.lat,o.lng)}))
+                    .filter(x=>x.d<=radMi).sort((a,b)=>a.d-b.d);
+    pts=tagged.map(x=>x.o);
     document.getElementById('mapcount').textContent =
       `${pts.length} within ${fmtRadius(FOLLOW_RADIUS_FT)}`;
+    updateProxBanner(tagged);   // live "N nearby · nearest: Name" readout
     // Only rebuild the markers when the visible SET actually changed. A GPS
     // heartbeat that returns the same offices must not clear+re-add layers — that
     // flicker is what was collapsing clusters and dropping taps.
@@ -1254,6 +1266,29 @@ function fmtRadius(ft){
   if(ft<=1000) return ft+" ft";
   const mi=ft/5280;
   return (Math.abs(mi-Math.round(mi))<1e-9 ? Math.round(mi) : mi.toFixed(1))+" mi";
+}
+// Distance in feet for the banner readout.
+function feetBetween(lat1,lng1,lat2,lng2){ return Math.round(haversine(lat1,lng1,lat2,lng2)*5280); }
+// Live summary banner: "N nearby · nearest: Name (NNN ft)". Updates IN PLACE as
+// you drive (no pop-pop-pop). `tagged` is [{o,d(mi)}] already sorted nearest-first.
+// Tapping it opens the nearest office's detail.
+let _proxNearestId=null;
+function updateProxBanner(tagged){
+  const bn=document.getElementById('proxBanner'); if(!bn) return;
+  if(!followMode || !tagged || !tagged.length){
+    bn.classList.remove('show'); bn.innerHTML=""; _proxNearestId=null; return;
+  }
+  const n=tagged.length;
+  const nearest=tagged[0].o;
+  const ft=userPos?feetBetween(userPos.lat,userPos.lng,nearest.lat,nearest.lng):0;
+  _proxNearestId=nearest.id;
+  const others = n>1 ? `<span style="color:var(--ink-faint)"> · +${n-1} more</span>` : "";
+  bn.innerHTML=
+    `<span class="pbi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>`+
+    `<span class="pbt"><div class="pbn">${esc(nearest.name||'(unnamed office)')}</div>`+
+    `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}${others}</div></span>`;
+  bn.classList.add('show');
+  bn.onclick=()=>{ if(_proxNearestId) openDetail(_proxNearestId); };
 }
 function drawUser(){
   if(!userPos||!mapObj) return;
@@ -1328,6 +1363,8 @@ function stopFollow(){
   followHeartbeat=null;
   const lb=document.getElementById('locateBtn'); if(lb){ lb.classList.remove('following'); lb.classList.remove('locating'); }
   showRadiusUI(false);
+  const bn=document.getElementById('proxBanner'); if(bn){ bn.classList.remove('show'); bn.innerHTML=""; }
+  _proxNearestId=null;
   render();
 }
 // +/- radius stepper shown on the map only while following.
