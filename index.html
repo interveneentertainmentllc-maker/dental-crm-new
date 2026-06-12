@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="IL Dental CRM">
+<meta name="apple-mobile-web-app-title" content="Salesly">
 <meta name="theme-color" content="#0f3d36">
-<title>IL Dental CRM</title>
+<title>Salesly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@10..48,400;10..48,600;10..48,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@
   --paper:#f4f1ea; --surface:#ffffff; --surface-2:#faf8f3;
   --ink:#16211d; --ink-soft:#4b5a53; --ink-faint:#8a978f;
   --line:#e2ddd1; --line-strong:#cfc8b8;
-  --teal:#0f7a6b; --teal-deep:#0f3d36; --teal-wash:#e2efec;
+  --teal:#23bfcd; --teal-deep:#0e6a73; --teal-wash:#dff5f7;
   --amber:#bf6b16; --amber-wash:#fbeede;
   --green:#2f7d3f; --green-wash:#e6f1e4;
   --danger:#b3402f; --danger-wash:#f7e6e2;
@@ -255,6 +255,13 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .locate-btn:active{background:var(--teal-deep);}
 .locate-btn.locating svg{animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
+.locate-btn.following{background:var(--teal-deep);box-shadow:0 0 0 0 rgba(35,191,205,.55),var(--shadow-lg);animation:followpulse 1.8s ease-out infinite;}
+@keyframes followpulse{0%{box-shadow:0 0 0 0 rgba(35,191,205,.5),var(--shadow-lg);}70%{box-shadow:0 0 0 14px rgba(35,191,205,0),var(--shadow-lg);}100%{box-shadow:0 0 0 0 rgba(35,191,205,0),var(--shadow-lg);}}
+.rad-ctrl{position:absolute;bottom:calc(var(--safe-bottom) + 152px);right:14px;z-index:600;display:none;align-items:center;gap:0;background:#fff;border-radius:24px;box-shadow:var(--shadow-lg);overflow:hidden;}
+.rad-ctrl.show{display:flex;}
+.rad-btn{width:40px;height:40px;font-size:22px;font-weight:700;color:var(--teal-deep);background:#fff;display:flex;align-items:center;justify-content:center;line-height:1;}
+.rad-btn:active{background:var(--teal-wash);}
+.rad-label{min-width:62px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);border-left:1px solid var(--line);border-right:1px solid var(--line);padding:0 4px;}
 .userdot{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 4px rgba(26,115,232,.25),0 2px 6px rgba(0,0,0,.3);}
 .nearby-toggle{position:absolute;bottom:calc(var(--safe-bottom) + 90px);left:14px;z-index:600;background:var(--teal-deep);color:#fff;border-radius:24px;padding:11px 16px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:none;align-items:center;gap:7px;}
 .nearby-toggle.show{display:flex;}
@@ -269,7 +276,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 <header>
   <div class="ht">
     <div>
-      <h1>IL Dental CRM</h1>
+      <h1>Salesly</h1>
       <div class="sub" id="subline">loading…</div>
       <button id="btnSync" class="synclink" aria-label="Team sync settings">
         <span id="syncDot" class="syncdot"></span><span id="syncLabel">Team sync: off</span>
@@ -336,6 +343,11 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 </div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
+  <div class="rad-ctrl" id="radCtrl">
+    <button class="rad-btn" id="radMinus" aria-label="Smaller radius">−</button>
+    <span class="rad-label" id="radLabel">1000 ft</span>
+    <button class="rad-btn" id="radPlus" aria-label="Larger radius">+</button>
+  </div>
   <button class="locate-btn" id="locateBtn" aria-label="Find my location">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
   </button>
@@ -654,6 +666,18 @@ let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list
 let mapObj=null, clusterLayer=null, mapBuilt=false;
 let userPos=null, userMarker=null, nearbyMode=false;
 const NEARBY_N=25;
+// ---- driving / follow mode ----
+// followMode: the map tracks your GPS as you drive, shows only offices within a
+// set radius, and HOLDS your zoom/position across refreshes (logging a visit or a
+// background sync will not yank the view). You can still pinch-zoom and pan.
+let followMode=false;
+let watchId=null;            // navigator.geolocation.watchPosition id
+let followHeartbeat=null;    // backstop timer if the watch goes quiet (iOS throttling)
+let userMovedMap=false;      // you panned/zoomed manually -> pause auto-recenter briefly
+let _selfMove=false;         // guard so OUR recenters don't count as "you moved the map"
+let FOLLOW_RADIUS_FT=1000;   // refresh radius in feet (adjustable with +/- on the map)
+const FOLLOW_STEPS_FT=[500,1000,2000,2640,5280];  // 500ft,1000ft,~0.4mi,0.5mi,1mi
+const FOLLOW_ZOOM=16;        // tight neighborhood zoom used on the FIRST lock only
 let store={over:{},add:[],del:[]};   // over: keyed edits/notes on seed; add: new offices; del: removed seed indices
 let undoStack=[];
 
@@ -1064,6 +1088,15 @@ function buildMap(){
   clusterLayer=L.markerClusterGroup({chunkedLoading:true,maxClusterRadius:50,spiderfyOnMaxZoom:true});
   mapObj.addLayer(clusterLayer);
   mapObj.on('popupopen', wirePopup);
+  // If you manually drag/zoom while following, pause auto-recenter for a bit so
+  // the map doesn't fight you. It resumes (snaps back to you) after a short idle.
+  mapObj.on('movestart zoomstart',()=>{
+    if(followMode && !_selfMove){
+      userMovedMap=true;
+      clearTimeout(mapObj._resumeT);
+      mapObj._resumeT=setTimeout(()=>{ userMovedMap=false; },6000);
+    }
+  });
   mapBuilt=true;
 }
 function popupHTML(o){
@@ -1115,7 +1148,30 @@ function refreshMap(filtered){
   setTimeout(fixSize,120); setTimeout(fixSize,350);
   clusterLayer.clearLayers();
   let pts=filtered.filter(o=>o.lat&&o.lng);
-  // nearby mode: restrict to N closest to the user
+
+  // ---- FOLLOW (driving) MODE -------------------------------------------------
+  // Show only offices within FOLLOW_RADIUS_FT of you, and DO NOT fitBounds — we
+  // keep whatever zoom/position you (or the first lock) set, so logging a visit
+  // or a background sync never throws you back to a zoomed-out view.
+  if(followMode && userPos){
+    const radMi=FOLLOW_RADIUS_FT/5280;
+    pts=pts.filter(o=>haversine(userPos.lat,userPos.lng,o.lat,o.lng)<=radMi);
+    document.getElementById('mapcount').textContent =
+      `${pts.length} within ${fmtRadius(FOLLOW_RADIUS_FT)}`;
+    const markers=pts.map(makeMarker);
+    clusterLayer.addLayers(markers);
+    // Recenter on you ONLY if you haven't manually panned away. Never change zoom
+    // here — hold the user's current zoom so the view stays where they left it.
+    if(!userMovedMap){
+      _selfMove=true;
+      try{ mapObj.setView([userPos.lat,userPos.lng], mapObj.getZoom(), {animate:false}); }catch(e){}
+      _selfMove=false;
+    }
+    drawUser();
+    return;
+  }
+
+  // ---- NEARBY MODE (legacy "Nearest 25") ------------------------------------
   if(nearbyMode && userPos){
     pts=pts.map(o=>({o,d:haversine(userPos.lat,userPos.lng,o.lat,o.lng)}))
            .sort((a,b)=>a.d-b.d).slice(0,NEARBY_N).map(x=>x.o);
@@ -1124,7 +1180,7 @@ function refreshMap(filtered){
     (nearbyMode&&userPos ? `${pts.length} nearest` : `${pts.length.toLocaleString()} offices`);
   const markers=pts.map(makeMarker);
   clusterLayer.addLayers(markers);
-  // fit bounds
+  // fit bounds (only when NOT following — following holds the view)
   if(nearbyMode && userPos && pts.length){
     const b=L.latLngBounds(pts.map(o=>[o.lat,o.lng])); b.extend([userPos.lat,userPos.lng]);
     try{ mapObj.fitBounds(b.pad(0.12),{maxZoom:15}); }catch(e){}
@@ -1132,6 +1188,13 @@ function refreshMap(filtered){
     try{ mapObj.fitBounds(L.latLngBounds(pts.map(o=>[o.lat,o.lng])).pad(0.05),{maxZoom:13}); }catch(e){}
   }
   drawUser();
+}
+// Pretty-print the radius for the map label. Show feet up to 1000 ft, then miles
+// (so the 0.4 mi and 0.5 mi steps read as miles, not "2640 ft").
+function fmtRadius(ft){
+  if(ft<=1000) return ft+" ft";
+  const mi=ft/5280;
+  return (Math.abs(mi-Math.round(mi))<1e-9 ? Math.round(mi) : mi.toFixed(1))+" mi";
 }
 function drawUser(){
   if(!userPos||!mapObj) return;
@@ -1142,32 +1205,86 @@ function drawUser(){
   }
 }
 function locateMe(){
+  // Tap the locate button toggles DRIVING/FOLLOW mode on and off.
+  if(followMode){ stopFollow(); toast("Stopped following"); return; }
+  startFollow();
+}
+function startFollow(){
   if(!navigator.geolocation){ toast("Location not supported on this device"); return; }
   // iOS Safari blocks geolocation on insecure origins (file:// or http://).
-  // window.isSecureContext is true for https:// and localhost.
-  if(window.isSecureContext===false){
-    toast("Open the https:// site to use location");
-    return;
-  }
+  if(window.isSecureContext===false){ toast("Open the https:// site to use location"); return; }
   const btn=document.getElementById('locateBtn');
   btn.classList.add('locating');
   if(state.view!=="map") setView("map");
-  navigator.geolocation.getCurrentPosition(pos=>{
+  followMode=true; nearbyMode=false; userMovedMap=false;
+  btn.classList.add('following');
+  showRadiusUI(true);
+  const nb=document.getElementById('nearbyBtn'); if(nb) nb.classList.remove('show');
+  try{ if(watchId!=null) navigator.geolocation.clearWatch(watchId); }catch(e){}
+  let firstFix=true, lastFixAt=0;
+  const apply=pos=>{
     btn.classList.remove('locating');
-    userPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    nearbyMode=true;
-    document.getElementById('nearbyBtn').classList.add('show');
-    updateNearbyLabel();
-    buildMap(); render(); // render triggers refreshMap (nearby)
-    toast(`Showing ${NEARBY_N} offices near you`);
-  }, err=>{
+    lastFixAt=Date.now();
+    userPos={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy};
+    if(firstFix){
+      firstFix=false; userMovedMap=false;
+      // On the FIRST lock only, snap to a tight neighborhood zoom centered on you.
+      _selfMove=true;
+      try{ mapObj.setView([userPos.lat,userPos.lng], FOLLOW_ZOOM, {animate:false}); }catch(e){}
+      _selfMove=false;
+      toast("Following you — offices within "+fmtRadius(FOLLOW_RADIUS_FT));
+    }
+    drawUser();
+    render(); // re-filter to the radius and recenter (no zoom change, no fitBounds)
+  };
+  const onErr=err=>{
     btn.classList.remove('locating');
-    let msg="Couldn't get your location";
-    if(err.code===1) msg="Location blocked — allow it in Settings ▸ Safari";
-    else if(err.code===2) msg="Location unavailable right now";
-    else if(err.code===3) msg="Location timed out — try again";
-    toast(msg);
-  }, {enableHighAccuracy:true, timeout:20000, maximumAge:60000});
+    // Don't kill tracking on a transient timeout mid-drive; only bail on first fix.
+    if(firstFix){
+      let msg="Couldn't get your location";
+      if(err.code===1) msg="Location blocked — allow it in Settings ▸ Safari";
+      else if(err.code===2) msg="Location unavailable right now";
+      else if(err.code===3) msg="Location timed out — try again";
+      toast(msg); stopFollow();
+    }
+  };
+  // Primary: continuous watch. maximumAge:0 forces a FRESH fix each time (no stale
+  // cached position), so the dot actually moves as you drive.
+  watchId=navigator.geolocation.watchPosition(apply,onErr,{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+  // Heartbeat backstop: iOS Safari sometimes throttles watchPosition and stops
+  // firing even while moving. If no fresh fix in ~4s, actively request one.
+  try{ if(followHeartbeat) clearInterval(followHeartbeat); }catch(e){}
+  followHeartbeat=setInterval(()=>{
+    if(!followMode){ clearInterval(followHeartbeat); followHeartbeat=null; return; }
+    if(Date.now()-lastFixAt>4000){
+      navigator.geolocation.getCurrentPosition(apply,()=>{},{enableHighAccuracy:true,timeout:10000,maximumAge:0});
+    }
+  },4000);
+}
+function stopFollow(){
+  followMode=false;
+  try{ if(watchId!=null) navigator.geolocation.clearWatch(watchId); }catch(e){}
+  watchId=null;
+  try{ if(followHeartbeat) clearInterval(followHeartbeat); }catch(e){}
+  followHeartbeat=null;
+  const lb=document.getElementById('locateBtn'); if(lb){ lb.classList.remove('following'); lb.classList.remove('locating'); }
+  showRadiusUI(false);
+  render();
+}
+// +/- radius stepper shown on the map only while following.
+function changeRadius(dir){
+  const i=FOLLOW_STEPS_FT.indexOf(FOLLOW_RADIUS_FT);
+  let ni = i<0 ? 1 : i+dir;
+  ni=Math.max(0,Math.min(FOLLOW_STEPS_FT.length-1,ni));
+  FOLLOW_RADIUS_FT=FOLLOW_STEPS_FT[ni];
+  const lbl=document.getElementById('radLabel'); if(lbl) lbl.textContent=fmtRadius(FOLLOW_RADIUS_FT);
+  userMovedMap=false;            // re-center on the next refresh
+  render();
+}
+function showRadiusUI(on){
+  const box=document.getElementById('radCtrl'); if(!box) return;
+  box.classList.toggle('show',!!on);
+  const lbl=document.getElementById('radLabel'); if(lbl) lbl.textContent=fmtRadius(FOLLOW_RADIUS_FT);
 }
 function updateNearbyLabel(){
   const lbl=document.getElementById('nearbyLabel');
@@ -1189,6 +1306,7 @@ function setView(v){
     render();
   } else {
     mv.classList.remove('on'); mn.style.display="";
+    if(followMode){ stopFollow(); }   // leaving the map stops GPS tracking
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg> Map`;
     render();
   }
@@ -1475,12 +1593,12 @@ function emailCSV(){
   // try Web Share with file (iOS Safari supports navigator.share files)
   const file=new File([csv],`IL-Dental-visited-${new Date().toISOString().slice(0,10)}.csv`,{type:"text/csv"});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({files:[file],title:"IL Dental CRM — Visited Offices",text:`${count} visited offices for marketing.`}).catch(()=>{});
+    navigator.share({files:[file],title:"Salesly — Visited Offices",text:`${count} visited offices for marketing.`}).catch(()=>{});
   } else {
     // fallback: mailto with summary (CSV body truncated by mail clients, so also trigger download)
     downloadCSV(true);
-    const body=encodeURIComponent(`${count} visited dental offices attached (downloaded as CSV — please attach the file).\n\nGenerated by IL Dental CRM.`);
-    location.href=`mailto:?subject=${encodeURIComponent('IL Dental CRM — Visited Offices ('+count+')')}&body=${body}`;
+    const body=encodeURIComponent(`${count} visited dental offices attached (downloaded as CSV — please attach the file).\n\nGenerated by Salesly.`);
+    location.href=`mailto:?subject=${encodeURIComponent('Salesly — Visited Offices ('+count+')')}&body=${body}`;
   }
 }
 function openRoute(){
@@ -1620,7 +1738,7 @@ function openSync(){
   // Apps Script source shown to the user — kept out of the template literal
   // below (assembled by lines) so its braces/quotes don't fight the HTML.
   const gsScript=[
-    '// IL Dental CRM — row-per-office sync + append-only VisitLog tab.',
+    '// Salesly — row-per-office sync + append-only VisitLog tab.',
     '// Tab 1 (offices): one editable row per office (unchanged, fully wipe-protected).',
     '// Tab 2 ("VisitLog"): one row per visit, APPEND-ONLY. Never edited or cleared by',
     '// the app, so it is a safe, readable, sortable activity ledger.',
@@ -1892,6 +2010,8 @@ function wire(){
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
   on('routeBtn','click',openRoute);
+  on('radMinus','click',()=>changeRadius(-1));
+  on('radPlus','click',()=>changeRadius(1));
   on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
   on('sheetX','click',hideSheet);
   on('sheetBg','click',hideSheet);
