@@ -245,7 +245,8 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .prox-banner .pbn{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .prox-banner .pbd{font-size:11.5px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .prox-banner .pbd b{color:var(--teal-deep);}
-.prox-banner .pb-more{color:var(--teal-deep);font-weight:700;}
+.prox-banner .pb-more{display:inline-flex;align-items:center;gap:4px;color:var(--teal-deep);font-weight:800;font-size:14px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:8px 14px;margin-top:5px;line-height:1;white-space:nowrap;}
+.prox-banner .pb-more:active{background:var(--teal);color:#fff;}
 .prox-banner .pb-list{border-top:1px solid var(--line);max-height:208px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
 .prox-banner .pr-row:last-child{border-bottom:none;}
@@ -1328,13 +1329,14 @@ function updateProxBanner(tagged){
   const ft=userPos?feetBetween(userPos.lat,userPos.lng,nearest.lat,nearest.lng):0;
   _proxNearestId=nearest.id;
   const moreTxt = n>1
-    ? `<span class="pb-more">${_proxOpen?'▲ less':'+'+(n-1)+' more'}</span>`
+    ? `<div class="pb-more">${_proxOpen?'▲ show less':'+'+(n-1)+' more offices'}</div>`
     : "";
   bn.innerHTML=
     `<div class="pb-head" id="pbHead">`+
       `<span class="pbi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>`+
       `<span class="pbt"><div class="pbn">${esc(nearest.name||'(unnamed office)')}</div>`+
-      `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}${n>1?' · ':''}${moreTxt}</div></span>`+
+      `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}</div>`+
+      `${moreTxt}</span>`+
     `</div>`+
     `<div class="pb-list" id="proxList" style="display:none;"></div>`;
   bn._built=true;
