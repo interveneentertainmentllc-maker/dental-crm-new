@@ -675,6 +675,9 @@ let watchId=null;            // navigator.geolocation.watchPosition id
 let followHeartbeat=null;    // backstop timer if the watch goes quiet (iOS throttling)
 let userMovedMap=false;      // you panned/zoomed manually -> pause auto-recenter briefly
 let _selfMove=false;         // guard so OUR recenters don't count as "you moved the map"
+let _popupOpen=false;        // a marker popup is open -> don't rebuild/recenter
+let _spiderOpen=false;       // a cluster is spiderfied (expanded) -> don't rebuild/recenter
+let _lastFollowKey="";       // signature of currently-shown follow markers (skip needless rebuilds)
 let FOLLOW_RADIUS_FT=1000;   // refresh radius in feet (adjustable with +/- on the map)
 const FOLLOW_STEPS_FT=[500,1000,2000,2640,5280];  // 500ft,1000ft,~0.4mi,0.5mi,1mi
 const FOLLOW_ZOOM=16;        // tight neighborhood zoom used on the FIRST lock only
@@ -770,6 +773,7 @@ async function decompressSeed(){
 // seed record: [n,a,c,z,lat,lng,co]  -> office object with id "s{idx}"
 function rebuild(){
   DB=[];
+  _lastFollowKey="";   // data changed -> let follow mode rebuild its markers once
   const delSet=new Set(store.del);
   const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy"];
   const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });
@@ -1088,6 +1092,18 @@ function buildMap(){
   clusterLayer=L.markerClusterGroup({chunkedLoading:true,maxClusterRadius:50,spiderfyOnMaxZoom:true});
   mapObj.addLayer(clusterLayer);
   mapObj.on('popupopen', wirePopup);
+  // While a popup is open OR a cluster is spiderfied (expanded), DON'T let a GPS
+  // refresh rebuild/recenter the map — that was collapsing the cluster before you
+  // could tap a pin. Track both states and pause refresh accordingly.
+  mapObj.on('popupopen', ()=>{ _popupOpen=true; });
+  mapObj.on('popupclose', ()=>{ _popupOpen=false; });
+  clusterLayer.on('spiderfied', ()=>{ _spiderOpen=true; userMovedMap=true; });
+  clusterLayer.on('unspiderfied', ()=>{ _spiderOpen=false;
+    clearTimeout(mapObj._resumeT); mapObj._resumeT=setTimeout(()=>{ userMovedMap=false; },6000); });
+  // Tapping a cluster is a deliberate interaction — pause auto-recenter so the
+  // expand/zoom isn't yanked back.
+  clusterLayer.on('clusterclick', ()=>{ if(followMode){ userMovedMap=true; clearTimeout(mapObj._resumeT);
+    mapObj._resumeT=setTimeout(()=>{ userMovedMap=false; },6000); } });
   // If you manually drag/zoom while following, pause auto-recenter for a bit so
   // the map doesn't fight you. It resumes (snaps back to you) after a short idle.
   mapObj.on('movestart zoomstart',()=>{
@@ -1138,6 +1154,13 @@ function wirePopup(e){
 }
 function refreshMap(filtered){
   buildMap();
+  // FOLLOW MODE: if a popup is open or a cluster is expanded, a GPS refresh must
+  // NOT rebuild the markers (that collapses what you're tapping). Just keep the
+  // blue dot current and bail — the markers stay exactly as they are.
+  if(followMode && (_popupOpen || _spiderOpen)){
+    drawUser();
+    return;
+  }
   // Recalculate the map's size reliably. A single fixed 60ms timeout can fire
   // BEFORE mobile Safari finishes laying out the (previously display:none) map
   // container, so Leaflet measures the wrong size and tiles render grey/blank
@@ -1146,7 +1169,6 @@ function refreshMap(filtered){
   const fixSize=()=>{ if(mapObj){ try{ mapObj.invalidateSize(false); }catch(e){} } };
   requestAnimationFrame(()=>{ fixSize(); requestAnimationFrame(fixSize); });
   setTimeout(fixSize,120); setTimeout(fixSize,350);
-  clusterLayer.clearLayers();
   let pts=filtered.filter(o=>o.lat&&o.lng);
 
   // ---- FOLLOW (driving) MODE -------------------------------------------------
@@ -1158,11 +1180,18 @@ function refreshMap(filtered){
     pts=pts.filter(o=>haversine(userPos.lat,userPos.lng,o.lat,o.lng)<=radMi);
     document.getElementById('mapcount').textContent =
       `${pts.length} within ${fmtRadius(FOLLOW_RADIUS_FT)}`;
-    const markers=pts.map(makeMarker);
-    clusterLayer.addLayers(markers);
+    // Only rebuild the markers when the visible SET actually changed. A GPS
+    // heartbeat that returns the same offices must not clear+re-add layers — that
+    // flicker is what was collapsing clusters and dropping taps.
+    const key=pts.map(o=>o.id).sort().join(",");
+    if(key!==_lastFollowKey){
+      clusterLayer.clearLayers();
+      clusterLayer.addLayers(pts.map(makeMarker));
+      _lastFollowKey=key;
+    }
     // Recenter on you ONLY if you haven't manually panned away. Never change zoom
     // here — hold the user's current zoom so the view stays where they left it.
-    if(!userMovedMap){
+    if(!userMovedMap && !_popupOpen && !_spiderOpen){
       _selfMove=true;
       try{ mapObj.setView([userPos.lat,userPos.lng], mapObj.getZoom(), {animate:false}); }catch(e){}
       _selfMove=false;
@@ -1172,6 +1201,9 @@ function refreshMap(filtered){
   }
 
   // ---- NEARBY MODE (legacy "Nearest 25") ------------------------------------
+  // Not following: always rebuild from scratch (and reset the follow signature).
+  clusterLayer.clearLayers();
+  _lastFollowKey="";
   if(nearbyMode && userPos){
     pts=pts.map(o=>({o,d:haversine(userPos.lat,userPos.lng,o.lat,o.lng)}))
            .sort((a,b)=>a.d-b.d).slice(0,NEARBY_N).map(x=>x.o);
@@ -1279,6 +1311,7 @@ function changeRadius(dir){
   FOLLOW_RADIUS_FT=FOLLOW_STEPS_FT[ni];
   const lbl=document.getElementById('radLabel'); if(lbl) lbl.textContent=fmtRadius(FOLLOW_RADIUS_FT);
   userMovedMap=false;            // re-center on the next refresh
+  _lastFollowKey="";            // force a rebuild for the new radius
   render();
 }
 function showRadiusUI(on){
