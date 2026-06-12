@@ -239,13 +239,14 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
 .prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
 .prox-banner.show{display:flex;opacity:1;}
-.prox-banner .pb-head{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;}
-.prox-banner .pbi{width:30px;height:30px;border-radius:9px;background:var(--teal-wash);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
-.prox-banner .pbt{min-width:0;line-height:1.25;flex:1 1 auto;}
-.prox-banner .pbn{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.prox-banner .pbd{font-size:11.5px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;}
+.prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
+.prox-banner .pbi{width:34px;height:34px;border-radius:10px;background:var(--teal-wash);display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.prox-banner .pbt{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;gap:4px;}
+.prox-banner .pbn{font-weight:700;font-size:15px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prox-banner .pbd{font-size:12px;color:var(--ink-soft);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .prox-banner .pbd b{color:var(--teal-deep);}
-.prox-banner .pb-more{display:inline-flex;align-items:center;gap:4px;color:var(--teal-deep);font-weight:800;font-size:14px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:8px 14px;margin-top:5px;line-height:1;white-space:nowrap;}
+.prox-banner .pb-more{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;margin-left:46px;color:var(--teal-deep);font-weight:700;font-size:13.5px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:7px 14px;line-height:1;white-space:nowrap;}
 .prox-banner .pb-more:active{background:var(--teal);color:#fff;}
 .prox-banner .pb-list{border-top:1px solid var(--line);max-height:208px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
@@ -1333,10 +1334,12 @@ function updateProxBanner(tagged){
     : "";
   bn.innerHTML=
     `<div class="pb-head" id="pbHead">`+
-      `<span class="pbi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>`+
-      `<span class="pbt"><div class="pbn">${esc(nearest.name||'(unnamed office)')}</div>`+
-      `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}</div>`+
-      `${moreTxt}</span>`+
+      `<div class="pb-row">`+
+        `<span class="pbi"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--teal-deep)" stroke-width="2.2"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>`+
+        `<span class="pbt"><div class="pbn">${esc(nearest.name||'(unnamed office)')}</div>`+
+        `<div class="pbd"><b>${ft.toLocaleString()} ft</b> · ${n} within ${fmtRadius(FOLLOW_RADIUS_FT)}</div></span>`+
+      `</div>`+
+      `${moreTxt}`+
     `</div>`+
     `<div class="pb-list" id="proxList" style="display:none;"></div>`;
   bn._built=true;
