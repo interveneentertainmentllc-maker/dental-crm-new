@@ -535,8 +535,27 @@ async function cloudPull(){
       // in the app. This is what makes hand-edits in the spreadsheet safe.
       const seedN=SEED.length;
       if(seedN>0 && js!==lastSyncJSON){
+        // CRITICAL: a pull adopts the Sheet, but must NOT drop local changes that
+        // haven't been pushed yet. Carry forward:
+        //  (1) added offices (store.add) whose id is absent from the Sheet,
+        //  (2) edited seed offices (store.over) for indices the Sheet doesn't have,
+        //  (3) local deletions (store.del) the Sheet hasn't recorded.
+        // These are local-only diffs mid-sync (new office / pin-drop / edit) — losing
+        // them is the "wipe". Anything the Sheet DOES have, the Sheet wins (shared truth).
+        const incomingAddIds={}; (ns.add||[]).forEach(a=>{ if(a.id) incomingAddIds[a.id]=1; });
+        const localOnlyAdds=(store.add||[]).filter(a=>a&&a.id&&!incomingAddIds[a.id]);
+        if(localOnlyAdds.length){ ns.add=(ns.add||[]).concat(localOnlyAdds); }
+        let carried=localOnlyAdds.length;
+        // edited seed offices the Sheet didn't return as overrides
+        Object.keys(store.over||{}).forEach(idx=>{
+          if(!(idx in ns.over) && ns.del.indexOf(parseInt(idx,10))<0){ ns.over[idx]=store.over[idx]; carried++; }
+        });
+        // local deletions the Sheet hasn't recorded yet
+        (store.del||[]).forEach(idx=>{ if(ns.del.indexOf(idx)<0){ ns.del.push(idx); carried++; } });
         store=ns; lastSyncJSON=JSON.stringify(store);
         try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
+        // If we carried any local-only diffs forward, push them so the Sheet catches up.
+        if(carried){ try{ setTimeout(()=>{ cloudPush(true); }, 800); }catch(e){} }
         changed=true;
       }
     } else {
