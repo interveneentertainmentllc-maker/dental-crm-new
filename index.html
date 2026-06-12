@@ -440,7 +440,7 @@ function repTerritory(){ return ME?(ME.territory||""):""; }
 const GS_CFG_KEY="ildental_gs";
 let GS_URL="";
 try{const c=JSON.parse(localStorage.getItem(GS_CFG_KEY)||"{}");GS_URL=c.url||"";}catch(e){}
-let cloudOn=false, lastSyncJSON="", pollTimer=null, pulling=false, pushing=false, lastRawRows=0, lastSyncAt=0, watchdog=null;
+let cloudOn=false, lastSyncJSON="", lastSheetJS="", pollTimer=null, pulling=false, pushing=false, lastRawRows=0, lastSyncAt=0, watchdog=null;
 const POLL_MS=15000;
 
 function cloudInit(){
@@ -534,7 +534,12 @@ async function cloudPull(){
       // We do NOT auto-push back — the app only writes when YOU add/edit/delete
       // in the app. This is what makes hand-edits in the spreadsheet safe.
       const seedN=SEED.length;
-      if(seedN>0 && js!==lastSyncJSON){
+      // Gate on the RAW sheet JSON (js), not the post-carry store. If we compared
+      // against the carried store, an unsynced local add would make js!=last every
+      // poll and re-fire this block (and the catch-up push) endlessly. Comparing
+      // raw-sheet-to-raw-sheet means we only re-adopt when the SHEET truly changes.
+      if(seedN>0 && js!==lastSheetJS){
+        lastSheetJS=js;
         // CRITICAL: a pull adopts the Sheet, but must NOT drop local changes that
         // haven't been pushed yet. Carry forward:
         //  (1) added offices (store.add) whose id is absent from the Sheet,
@@ -643,6 +648,9 @@ async function cloudPush(silent){
     const res=await fetch(GS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     if(!res.ok) throw new Error("http "+res.status);
     lastSyncAt=Date.now();
+    // The next pull will read back what we just wrote; pre-stamp lastSheetJS to
+    // that normalized form so the poll doesn't see it as a fresh "sheet changed".
+    try{ lastSheetJS=JSON.stringify(rowsToStore(rows)); }catch(e){}
     rebuild();
     if(!silent) toast("Synced to team");
   }catch(e){ lastSyncJSON=prevSync; if(!silent) toast("⚠️ Sync failed — saved on device"); }
@@ -709,6 +717,7 @@ const NEARBY_N=25;
 // set radius, and HOLDS your zoom/position across refreshes (logging a visit or a
 // background sync will not yank the view). You can still pinch-zoom and pan.
 let followMode=false;
+let _wasFollowing=false;     // were we following before popping into the list view?
 let watchId=null;            // navigator.geolocation.watchPosition id
 let followHeartbeat=null;    // backstop timer if the watch goes quiet (iOS throttling)
 let userMovedMap=false;      // you panned/zoomed manually -> pause auto-recenter briefly
@@ -1490,9 +1499,16 @@ function setView(v){
     mv.classList.add('on'); mn.style.display="none";
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg> List`;
     render();
+    // Coming back to the map: resume GPS following where you are now. _wasFollowing
+    // remembers you were driving before you popped into the list. Guarded so we
+    // never double-start. Small delay lets the map container finish laying out.
+    if(_wasFollowing && !followMode){
+      setTimeout(()=>{ try{ if(state.view==="map" && !followMode) startFollow(); }catch(e){} }, 200);
+    }
   } else {
     mv.classList.remove('on'); mn.style.display="";
-    if(followMode){ stopFollow(); }   // leaving the map stops GPS tracking
+    _wasFollowing = followMode;        // remember so we can resume on return
+    if(followMode){ stopFollow(); }    // leaving the map stops GPS tracking (battery)
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg> Map`;
     render();
   }
