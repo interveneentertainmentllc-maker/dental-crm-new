@@ -677,6 +677,7 @@ let userMovedMap=false;      // you panned/zoomed manually -> pause auto-recente
 let _selfMove=false;         // guard so OUR recenters don't count as "you moved the map"
 let _popupOpen=false;        // a marker popup is open -> don't rebuild/recenter
 let _spiderOpen=false;       // a cluster is spiderfied (expanded) -> don't rebuild/recenter
+let _interactAt=0;           // when a popup/spider opened (stale-flag safety net)
 let _lastFollowKey="";       // signature of currently-shown follow markers (skip needless rebuilds)
 let FOLLOW_RADIUS_FT=1000;   // refresh radius in feet (adjustable with +/- on the map)
 const FOLLOW_STEPS_FT=[500,1000,2000,2640,5280];  // 500ft,1000ft,~0.4mi,0.5mi,1mi
@@ -1118,9 +1119,9 @@ function buildMap(){
   // While a popup is open OR a cluster is spiderfied (expanded), DON'T let a GPS
   // refresh rebuild/recenter the map — that was collapsing the cluster before you
   // could tap a pin. Track both states and pause refresh accordingly.
-  mapObj.on('popupopen', ()=>{ _popupOpen=true; });
+  mapObj.on('popupopen', ()=>{ _popupOpen=true; _interactAt=Date.now(); });
   mapObj.on('popupclose', ()=>{ _popupOpen=false; });
-  clusterLayer.on('spiderfied', ()=>{ _spiderOpen=true; userMovedMap=true; });
+  clusterLayer.on('spiderfied', ()=>{ _spiderOpen=true; _interactAt=Date.now(); userMovedMap=true; });
   clusterLayer.on('unspiderfied', ()=>{ _spiderOpen=false;
     clearTimeout(mapObj._resumeT); mapObj._resumeT=setTimeout(()=>{ userMovedMap=false; },6000); });
   // Tapping a cluster is a deliberate interaction — pause auto-recenter so the
@@ -1179,10 +1180,11 @@ function refreshMap(filtered){
   buildMap();
   // FOLLOW MODE: if a popup is open or a cluster is expanded, a GPS refresh must
   // NOT rebuild the markers (that collapses what you're tapping). Just keep the
-  // blue dot current and bail — the markers stay exactly as they are.
+  // blue dot current and bail. Safety net: if a flag has been "open" for over 60s
+  // (a close event was somehow missed), treat it as stale so the map can't freeze.
   if(followMode && (_popupOpen || _spiderOpen)){
-    drawUser();
-    return;
+    if(Date.now()-_interactAt > 60000){ _popupOpen=false; _spiderOpen=false; }
+    else { drawUser(); return; }
   }
   // Recalculate the map's size reliably. A single fixed 60ms timeout can fire
   // BEFORE mobile Safari finishes laying out the (previously display:none) map
@@ -1209,6 +1211,7 @@ function refreshMap(filtered){
     const key=pts.map(o=>o.id).sort().join(",");
     if(key!==_lastFollowKey){
       clusterLayer.clearLayers();
+      _popupOpen=false; _spiderOpen=false;   // clearing removes any open popup/spider
       clusterLayer.addLayers(pts.map(makeMarker));
       _lastFollowKey=key;
     }
@@ -1226,6 +1229,7 @@ function refreshMap(filtered){
   // ---- NEARBY MODE (legacy "Nearest 25") ------------------------------------
   // Not following: always rebuild from scratch (and reset the follow signature).
   clusterLayer.clearLayers();
+  _popupOpen=false; _spiderOpen=false;   // no popup/spider survives a full clear
   _lastFollowKey="";
   if(nearbyMode && userPos){
     pts=pts.map(o=>({o,d:haversine(userPos.lat,userPos.lng,o.lat,o.lng)}))
