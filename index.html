@@ -282,7 +282,7 @@ body.sheet-open #mapview{z-index:0;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
-.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 150px);background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 210px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
 .prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;flex:0 0 auto;}
 .prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
@@ -953,6 +953,20 @@ function visitsToString(visits){
   }).join(" | ");
 }
 function lastColor(o){ if(!o.visits)return ""; for(const v of o.visits){ if(v.color)return v.color; } return ""; }
+// Auto-visit on edit: when a rep changes anything about an office, treat that as
+// a visit TODAY so they don't have to remember the "Log visit" button. We only
+// add one if today isn't already logged (so repeated edits in a day don't pile
+// up), we carry over the office's most recent status color, and we stamp the rep.
+// `visits` is the working array (newest-first); `prevColor` is the last color
+// before editing. Returns the (possibly extended) array.
+function ensureVisitToday(visits, prevColor){
+  const today=todayStr();
+  visits=Array.isArray(visits)?visits.slice():[];
+  if(visits.some(v=>v&&normDate(v.date)===today)) return visits;   // already logged today
+  visits.unshift({date:today, color:(prevColor||""), note:"", rep:meName()});
+  visits.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  return visits;
+}
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function toast(msg,undo){const t=document.getElementById('toast');t.innerHTML=esc(msg)+(undo?' <span class="undo" id="undoLink">Undo</span>':'');t.classList.add('show');if(undo){document.getElementById('undoLink').onclick=()=>{doUndo();t.classList.remove('show');};}clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),undo?5000:1800);}
 
@@ -1294,6 +1308,11 @@ function refreshMap(filtered){
   const fixSize=()=>{ if(mapObj){ try{ mapObj.invalidateSize(false); }catch(e){} } };
   requestAnimationFrame(()=>{ fixSize(); requestAnimationFrame(fixSize); });
   setTimeout(fixSize,120); setTimeout(fixSize,350);
+  // Older / slower phones can finish laying out the map container well after the
+  // short backstops above, leaving Leaflet measured at the wrong size (tiles show
+  // at the wrong zoom / off-center until a manual nudge). Add late backstops so
+  // the map re-fits once the device catches up.
+  setTimeout(fixSize,700); setTimeout(fixSize,1200);
   let pts=filtered.filter(o=>o.lat&&o.lng);
 
   // ---- FOLLOW (driving) MODE -------------------------------------------------
@@ -1895,6 +1914,18 @@ function saveForm(id,getScan,getVisits,getActive){
     phone:g('f_phone'),email:g('f_email'),scanner:getScan(),lab:g('f_lab'),
     drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes'),visits,
     active:(getActive?getActive():true)};
+  // AUTO-LOG A VISIT ON EDIT: if this is an existing office and the rep actually
+  // changed a field (note, scanner, hours, etc. — or the visit list itself),
+  // record a visit dated today (carrying the last status color), so they don't
+  // have to tap "Log visit". One per day max (ensureVisitToday guards that).
+  if(id && existing){
+    const fields=["name","addr","city","zip","phone","email","scanner","lab","drs","hours","visitDay","notes"];
+    const fieldChanged=fields.some(k=>String((data[k]==null?"":data[k]))!==String((existing[k]==null?"":existing[k])));
+    const visitsChanged=visitsToString(visits)!==visitsToString(parseVisits(existing.visits));
+    if(fieldChanged||visitsChanged){
+      data.visits=ensureVisitToday(data.visits, lastColor(existing));
+    }
+  }
   pushUndo(id?"edit "+name:"add "+name);
   if(!id){
     data.id="c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -1933,11 +1964,13 @@ function quickNote(id){
   const stamp=new Date().toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
   const line=`[${stamp}] ${txt}`;
   const newNotes = o.notes ? (o.notes.trimEnd()+"\n"+line) : line;
+  // A quick-note from the field IS a visit — auto-log today (carry last color, max one/day).
+  const newVisits=ensureVisitToday(o.visits, lastColor(o));
   if(id[0]==="s"){
     const idx=parseInt(id.slice(1),10);
-    store.over[idx]=Object.assign({},store.over[idx],{notes:newNotes,visited:true});
+    store.over[idx]=Object.assign({},store.over[idx],{notes:newNotes,visited:true,visits:newVisits});
   } else {
-    const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; }
+    const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; a.visits=newVisits; }
   }
   save(true); rebuild(); render();
   // re-open this marker's popup with the freshly saved note
