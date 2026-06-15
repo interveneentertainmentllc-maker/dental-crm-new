@@ -103,7 +103,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .empty{text-align:center;padding:60px 30px;color:var(--ink-faint);}
 .empty h3{font-family:var(--display);color:var(--ink-soft);margin:0 0 6px;}
 
-.fab{position:fixed;bottom:calc(var(--safe-bottom) + 18px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:650;pointer-events:none;}
+.fab{position:fixed;bottom:calc(var(--safe-bottom) + 10px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:650;pointer-events:none;}
 body.cal-view .fab{display:none;}
 .fab>*{pointer-events:auto;}
 .fab-add{flex:1;background:var(--teal);color:#fff;border-radius:14px;padding:15px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:var(--shadow-lg);}
@@ -301,6 +301,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .prox-banner .pb-more{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;margin-left:46px;color:var(--teal-deep);font-weight:700;font-size:13.5px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:7px 14px;line-height:1;white-space:nowrap;}
 .prox-banner .pb-more:active{background:var(--teal);color:#fff;}
 .prox-banner .pb-list{border-top:1px solid var(--line);flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.prox-banner.expanded .pb-list{min-height:200px;}
 .prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
 .prox-banner .pr-row:last-child{border-bottom:none;}
 .prox-banner .pr-row:active{background:var(--teal-wash);}
@@ -321,7 +322,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .popup-btn.ghost{background:var(--surface);border:1.5px solid var(--line-strong);color:var(--ink-soft);flex:1;}
 .popup-btn.add{flex:1;}
 .popup-meta{font-size:11px;color:var(--teal-deep);font-weight:600;margin-bottom:7px;font-family:var(--mono);}
-.locate-btn{position:absolute;bottom:calc(var(--safe-bottom) + 90px);right:14px;z-index:600;width:52px;height:52px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);}
+.locate-btn{position:absolute;bottom:calc(var(--safe-bottom) + 80px);right:14px;z-index:600;width:52px;height:52px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);}
 .locate-btn:active{background:var(--teal-deep);}
 .locate-btn.locating svg{animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -1479,7 +1480,12 @@ function drawUser(){
 }
 function locateMe(){
   // Tap the locate button toggles DRIVING/FOLLOW mode on and off.
-  if(followMode){ stopFollow(); toast("Stopped following"); return; }
+  // Edge case (iOS Chrome): auto-start may have set followMode=true but the
+  // automatic geolocation request was silently ignored, so no fix ever arrived
+  // (userPos is null). In that case a tap should RESTART follow via this real
+  // user gesture — not stop a mode that never actually engaged.
+  if(followMode && userPos){ stopFollow(); toast("Stopped following"); return; }
+  if(followMode && !userPos){ stopFollow(); }   // clear the half-started state, then start fresh below
   startFollow();
 }
 function startFollow(){
@@ -2527,6 +2533,14 @@ function startOnMapFollowing(){
     if(state.view!=="map") setView("map");
     // Give the map container a beat to lay out, then start following.
     setTimeout(()=>{ try{ if(!followMode) startFollow(); }catch(e){} }, 250);
+    // iOS Chrome often silently ignores a geolocation request that wasn't started
+    // by a user tap, so the auto-start can leave us "following" with no fix ever
+    // arriving (banner never appears, button stuck pulsing). If that happens,
+    // reset to a clean state after a few seconds so the user's first tap on the
+    // locate button cleanly starts follow via a real gesture (which Chrome honors).
+    setTimeout(()=>{
+      try{ if(followMode && !userPos){ stopFollow(); } }catch(e){}
+    }, 5200);
   }catch(e){}
 }
 
