@@ -46,14 +46,16 @@ input,textarea,select{font-family:inherit;font-size:16px;}
 #app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:560px;margin:0 auto;background:var(--paper);position:relative;}
 
 header{padding:calc(var(--safe-top) + 14px) 16px 10px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
-header .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+header .ht{display:flex;flex-direction:column;gap:10px;}
 header .ht>div:first-child{min-width:0;}
-.hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;}
-.hbtn{white-space:nowrap;flex:0 0 auto;}
+.hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;}
+.hbtn{white-space:nowrap;flex:1 1 0;justify-content:center;}
 @media (max-width:360px){
   .hbtns{gap:4px;}
   .hbtn{padding:8px 8px;font-size:11px;gap:4px;}
   header h1{font-size:18px;}
+  .iconrow{gap:5px;}
+  .ficon,.morebtn{padding:7px 10px;font-size:12px;gap:5px;}
 }
 header h1{font-family:var(--display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;}
 header .sub{font-size:11px;color:#9fc7be;font-family:var(--mono);margin-top:2px;}
@@ -209,8 +211,8 @@ body.cal-view .fab{display:none;}
 .fchip.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
 /* ---- grouped control card (priority filters) ---- */
 .ctrlwrap{padding:11px 14px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);}
-.iconrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
-.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
+.iconrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
 .ficon svg{width:15px;height:15px;flex:0 0 auto;}
 .ficon .cv{font-size:9px;opacity:.6;transition:transform .15s;}
 .ficon.open .cv{transform:rotate(180deg);}
@@ -230,7 +232,7 @@ body.cal-view .fab{display:none;}
 .heat b{font-family:var(--mono);font-size:13px;font-weight:700;}
 .heat.on{background:var(--teal-deep);border-color:var(--teal-deep);}
 .heat.on b{color:#fff;}
-.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
 .morebtn .cv{font-size:9px;opacity:.6;transition:transform .15s;}
 .morebtn.open .cv{transform:rotate(180deg);}
 .morebtn:focus,.morebtn:focus-visible{outline:none;}
