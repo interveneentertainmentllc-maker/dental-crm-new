@@ -287,6 +287,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
 .prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 260px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner.expanded{max-height:calc(100% - 78px - 200px - var(--safe-bottom));}
 .prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;flex:0 0 auto;}
 .prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
@@ -1410,6 +1411,7 @@ function renderProxList(){
     b.onclick=(e)=>{ e.stopPropagation(); const id=b.getAttribute('data-proxid');
       _proxOpen=false; _proxFrozen=null; renderProxList(); openDetail(id); };
   });
+  list.scrollTop=0;   // always show the nearest (first) row at the top when opening
 }
 function updateProxBanner(tagged){
   const bn=document.getElementById('proxBanner'); if(!bn) return;
@@ -1448,6 +1450,7 @@ function updateProxBanner(tagged){
     `<div class="pb-list" id="proxList" style="display:none;"></div>`;
   bn._built=true;
   bn.classList.add('show');
+  bn.classList.toggle('expanded', _proxOpen);   // expanded list needs more height than the collapsed summary
   // Header click: tapping the NAME opens the nearest; tapping "+N more"/"less" toggles list.
   const head=document.getElementById('pbHead');
   if(head) head.onclick=(e)=>{
