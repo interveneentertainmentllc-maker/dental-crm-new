@@ -31,18 +31,32 @@
   --display:'Bricolage Grotesque',Georgia,serif;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --safe-top:env(safe-area-inset-top,0px);
-  --safe-bottom:env(safe-area-inset-bottom,0px);
+  /* In a mobile-Chrome TAB, safe-area insets report 0, so bottom controls would
+     collapse onto the screen edge — right under Chrome's bottom toolbar. Enforce a
+     minimum floor so the Route/radius/Add-Office controls always clear it. In
+     standalone (home-screen icon) the real inset is larger and wins via max(). */
+  --safe-bottom:max(env(safe-area-inset-bottom,0px), 24px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{margin:0;padding:0;height:100%;}
+html,body{margin:0;padding:0;height:100%;height:100dvh;}
 body{font-family:var(--sans);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;line-height:1.45;}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
 input,textarea,select{font-family:inherit;font-size:16px;}
 ::-webkit-scrollbar{width:0;height:0;}
-#app{display:flex;flex-direction:column;height:100%;max-width:560px;margin:0 auto;background:var(--paper);position:relative;}
+#app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:560px;margin:0 auto;background:var(--paper);position:relative;}
 
 header{padding:calc(var(--safe-top) + 14px) 16px 10px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
-header .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+header .ht{display:flex;flex-direction:column;gap:10px;}
+header .ht>div:first-child{min-width:0;}
+.hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;}
+.hbtn{white-space:nowrap;flex:1 1 0;justify-content:center;}
+@media (max-width:360px){
+  .hbtns{gap:4px;}
+  .hbtn{padding:8px 8px;font-size:11px;gap:4px;}
+  header h1{font-size:18px;}
+  .iconrow{gap:5px;}
+  .ficon,.morebtn{padding:7px 10px;font-size:12px;gap:5px;}
+}
 header h1{font-family:var(--display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;}
 header .sub{font-size:11px;color:#9fc7be;font-family:var(--mono);margin-top:2px;}
 .synclink{display:inline-flex;align-items:center;gap:5px;margin-top:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cfe7e1;font-size:10.5px;font-family:var(--mono);padding:3px 8px;border-radius:20px;cursor:pointer;}
@@ -89,7 +103,8 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .empty{text-align:center;padding:60px 30px;color:var(--ink-faint);}
 .empty h3{font-family:var(--display);color:var(--ink-soft);margin:0 0 6px;}
 
-.fab{position:fixed;bottom:calc(var(--safe-bottom) + 18px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:30;pointer-events:none;}
+.fab{position:fixed;bottom:calc(var(--safe-bottom) + 10px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:650;pointer-events:none;}
+body.cal-view .fab{display:none;}
 .fab>*{pointer-events:auto;}
 .fab-add{flex:1;background:var(--teal);color:#fff;border-radius:14px;padding:15px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:var(--shadow-lg);}
 .fab-add:active{background:var(--teal-deep);}
@@ -196,8 +211,8 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .fchip.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
 /* ---- grouped control card (priority filters) ---- */
 .ctrlwrap{padding:11px 14px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);}
-.iconrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
-.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
+.iconrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
 .ficon svg{width:15px;height:15px;flex:0 0 auto;}
 .ficon .cv{font-size:9px;opacity:.6;transition:transform .15s;}
 .ficon.open .cv{transform:rotate(180deg);}
@@ -217,7 +232,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .heat b{font-family:var(--mono);font-size:13px;font-weight:700;}
 .heat.on{background:var(--teal-deep);border-color:var(--teal-deep);}
 .heat.on b{color:#fff;}
-.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
 .morebtn .cv{font-size:9px;opacity:.6;transition:transform .15s;}
 .morebtn.open .cv{transform:rotate(180deg);}
 .morebtn:focus,.morebtn:focus-visible{outline:none;}
@@ -234,10 +249,47 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 #mapview{display:none;flex:1;position:relative;z-index:1;}
 #mapview.on{display:flex;}
 body.sheet-open #mapview{z-index:0;}
+/* ---- calendar view ---- */
+#calview{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--paper);}
+#calview.on{display:block;}
+.cal-wrap{max-width:560px;margin:0 auto;padding:14px 14px calc(var(--safe-bottom) + 100px);}
+.cal-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+.cal-title{font-family:var(--display);font-size:21px;font-weight:700;color:var(--ink);}
+.cal-nav{width:40px;height:40px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:22px;line-height:1;color:var(--teal-deep);font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);}
+.cal-nav:active{background:var(--teal-wash);}
+.cal-sub{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-bottom:12px;}
+.cal-pick-wrap{margin:8px 0 10px;}
+.cal-pick{width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:15px;font-weight:600;color:var(--ink);box-shadow:var(--shadow);-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230e6a73' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 14px center;}
+.cal-rep{flex:0 1 auto;min-width:0;max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:700;color:var(--teal-deep);background:var(--teal-wash);border-radius:8px;padding:3px 8px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cal-dowrow{margin-bottom:5px;}
+.cal-dow{text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-faint);padding:2px 0;}
+.cal-cell{position:relative;aspect-ratio:1/1;border-radius:10px;background:#fff;border:1px solid var(--line);display:flex;align-items:flex-start;justify-content:flex-start;padding:5px 0 0 7px;}
+.cal-cell.blank{background:transparent;border:none;}
+.cal-cell .cal-dnum{font-size:13px;color:var(--ink-soft);font-weight:600;}
+.cal-cell.has{background:var(--teal-wash);border-color:var(--teal);}
+.cal-cell.has .cal-dnum{color:var(--teal-deep);font-weight:800;}
+.cal-cell.today{box-shadow:0 0 0 2px var(--teal) inset;}
+.cal-cell.sel{background:var(--teal);border-color:var(--teal-deep);}
+.cal-cell.sel .cal-dnum{color:#fff;}
+.cal-cell.sel .cal-badge{background:#fff;color:var(--teal-deep);}
+.cal-badge{position:absolute;bottom:5px;right:6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--teal-deep);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.cal-day-detail{margin-top:16px;}
+.cal-dd-head{font-weight:700;font-size:15px;color:var(--ink);margin-bottom:8px;}
+.cal-dd-row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:7px;}
+.cal-dd-row:active{background:var(--teal-wash);}
+.cal-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+.cal-dd-nm{flex:1 1 auto;min-width:0;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-vlabel{flex:0 0 auto;font-size:11px;font-weight:700;color:var(--teal-deep);background:var(--teal-wash);border-radius:8px;padding:3px 8px;}
+.cal-note{flex:0 1 auto;min-width:0;font-size:11px;color:var(--ink-soft);background:var(--paper);border-radius:8px;padding:3px 8px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-dd-empty,.cal-empty{text-align:center;color:var(--ink-soft);padding:24px 16px;}
+.cal-empty h3{color:var(--ink);margin:0 0 6px;}
+.cal-setme{margin-top:12px;background:var(--teal);color:#fff;border-radius:12px;padding:10px 18px;font-weight:700;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
-.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 150px);background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 260px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner.expanded{max-height:calc(100% - 78px - 200px - var(--safe-bottom));}
 .prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;flex:0 0 auto;}
 .prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
@@ -249,6 +301,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .prox-banner .pb-more{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;margin-left:46px;color:var(--teal-deep);font-weight:700;font-size:13.5px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:7px 14px;line-height:1;white-space:nowrap;}
 .prox-banner .pb-more:active{background:var(--teal);color:#fff;}
 .prox-banner .pb-list{border-top:1px solid var(--line);flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.prox-banner.expanded .pb-list{min-height:200px;}
 .prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
 .prox-banner .pr-row:last-child{border-bottom:none;}
 .prox-banner .pr-row:active{background:var(--teal-wash);}
@@ -269,7 +322,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .popup-btn.ghost{background:var(--surface);border:1.5px solid var(--line-strong);color:var(--ink-soft);flex:1;}
 .popup-btn.add{flex:1;}
 .popup-meta{font-size:11px;color:var(--teal-deep);font-weight:600;margin-bottom:7px;font-family:var(--mono);}
-.locate-btn{position:absolute;bottom:calc(var(--safe-bottom) + 90px);right:14px;z-index:600;width:52px;height:52px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);}
+.locate-btn{position:absolute;bottom:calc(var(--safe-bottom) + 80px);right:14px;z-index:600;width:52px;height:52px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);}
 .locate-btn:active{background:var(--teal-deep);}
 .locate-btn.locating svg{animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -305,6 +358,10 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
       <button class="hbtn" id="btnView" aria-label="Toggle map view">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg>
         Map
+      </button>
+      <button class="hbtn" id="btnCal" aria-label="Calendar of my visits">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        Calendar
       </button>
       <button class="hbtn" id="btnExport" aria-label="Export">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
@@ -379,6 +436,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
     <span>Route</span>
   </button>
 </div>
+<div id="calview"></div>
 </div>
 
 <div class="fab">
@@ -426,7 +484,7 @@ function loadMe(){
   try{const id=localStorage.getItem(ME_KEY); ME=id?repById(id):null;}catch(e){ME=null;}
   if(ME && !repById(ME.id)) ME=null;
 }
-function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.setItem(ME_KEY,id);}catch(e){} }
+function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.setItem(ME_KEY,id);}catch(e){} _calRepFilter="__me__"; }
 function isAdmin(){ return !!(ME&&ME.role==="admin"); }
 function meName(){ return ME?String(ME.name||"").replace(/\s+/g," ").trim():""; }
 function repTerritory(){ return ME?(ME.territory||""):""; }
@@ -664,7 +722,7 @@ function cloudSubscribe(){
       if(document.hidden||pushing||pulling) return;
       try{
         const changed=await cloudPull();
-        if(changed){ rebuild(); render(); toast("Updated from the Sheet"); }
+        if(changed){ rebuild(); renderActive(); toast("Updated from the Sheet"); }
       }catch(e){}
       setSyncBadge();
     },POLL_MS);
@@ -678,7 +736,7 @@ function cloudSubscribe(){
       if(!pollTimer || stale){
         pulling=false; pushing=false;
         if(!pollTimer) cloudSubscribe();
-        try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
+        try{ const changed=await cloudPull(); if(changed){ rebuild(); renderActive(); } }catch(e){}
         setSyncBadge();
       }
     },POLL_MS*2);
@@ -903,6 +961,20 @@ function visitsToString(visits){
   }).join(" | ");
 }
 function lastColor(o){ if(!o.visits)return ""; for(const v of o.visits){ if(v.color)return v.color; } return ""; }
+// Auto-visit on edit: when a rep changes anything about an office, treat that as
+// a visit TODAY so they don't have to remember the "Log visit" button. We only
+// add one if today isn't already logged (so repeated edits in a day don't pile
+// up), we carry over the office's most recent status color, and we stamp the rep.
+// `visits` is the working array (newest-first); `prevColor` is the last color
+// before editing. Returns the (possibly extended) array.
+function ensureVisitToday(visits, prevColor){
+  const today=todayStr();
+  visits=Array.isArray(visits)?visits.slice():[];
+  if(visits.some(v=>v&&normDate(v.date)===today)) return visits;   // already logged today
+  visits.unshift({date:today, color:(prevColor||""), note:"", rep:meName()});
+  visits.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  return visits;
+}
 function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function toast(msg,undo){const t=document.getElementById('toast');t.innerHTML=esc(msg)+(undo?' <span class="undo" id="undoLink">Undo</span>':'');t.classList.add('show');if(undo){document.getElementById('undoLink').onclick=()=>{doUndo();t.classList.remove('show');};}clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),undo?5000:1800);}
 
@@ -968,6 +1040,9 @@ function render(){
     }catch(_){}
   }
 }
+// Repaint whichever view is currently showing (used after a background sync so a
+// visible calendar/list/map all stay fresh).
+function renderActive(){ if(state.view==="calendar") renderCalendar(); else render(); }
 // Re-filter and repaint the list/map WITHOUT rebuilding the More drawer, so an
 // open native date picker isn't destroyed mid-selection. Used by the date inputs.
 let _skipDrawerRebuild=false;
@@ -1241,6 +1316,11 @@ function refreshMap(filtered){
   const fixSize=()=>{ if(mapObj){ try{ mapObj.invalidateSize(false); }catch(e){} } };
   requestAnimationFrame(()=>{ fixSize(); requestAnimationFrame(fixSize); });
   setTimeout(fixSize,120); setTimeout(fixSize,350);
+  // Older / slower phones can finish laying out the map container well after the
+  // short backstops above, leaving Leaflet measured at the wrong size (tiles show
+  // at the wrong zoom / off-center until a manual nudge). Add late backstops so
+  // the map re-fits once the device catches up.
+  setTimeout(fixSize,700); setTimeout(fixSize,1200);
   let pts=filtered.filter(o=>o.lat&&o.lng);
 
   // ---- FOLLOW (driving) MODE -------------------------------------------------
@@ -1334,6 +1414,7 @@ function renderProxList(){
     b.onclick=(e)=>{ e.stopPropagation(); const id=b.getAttribute('data-proxid');
       _proxOpen=false; _proxFrozen=null; renderProxList(); openDetail(id); };
   });
+  list.scrollTop=0;   // always show the nearest (first) row at the top when opening
 }
 function updateProxBanner(tagged){
   const bn=document.getElementById('proxBanner'); if(!bn) return;
@@ -1372,6 +1453,7 @@ function updateProxBanner(tagged){
     `<div class="pb-list" id="proxList" style="display:none;"></div>`;
   bn._built=true;
   bn.classList.add('show');
+  bn.classList.toggle('expanded', _proxOpen);   // expanded list needs more height than the collapsed summary
   // Header click: tapping the NAME opens the nearest; tapping "+N more"/"less" toggles list.
   const head=document.getElementById('pbHead');
   if(head) head.onclick=(e)=>{
@@ -1398,7 +1480,12 @@ function drawUser(){
 }
 function locateMe(){
   // Tap the locate button toggles DRIVING/FOLLOW mode on and off.
-  if(followMode){ stopFollow(); toast("Stopped following"); return; }
+  // Edge case (iOS Chrome): auto-start may have set followMode=true but the
+  // automatic geolocation request was silently ignored, so no fix ever arrived
+  // (userPos is null). In that case a tap should RESTART follow via this real
+  // user gesture — not stop a mode that never actually engaged.
+  if(followMode && userPos){ stopFollow(); toast("Stopped following"); return; }
+  if(followMode && !userPos){ stopFollow(); }   // clear the half-started state, then start fresh below
   startFollow();
 }
 function startFollow(){
@@ -1493,25 +1580,148 @@ function toggleNearby(){
 }
 function setView(v){
   state.view=v;
-  const mv=document.getElementById('mapview'), mn=document.getElementById('main');
+  const mv=document.getElementById('mapview'), mn=document.getElementById('main'), cv=document.getElementById('calview');
   const btn=document.getElementById('btnView');
+  // Leaving the map always stops GPS tracking (battery); remember so we can resume.
+  if(v!=="map" && followMode){ _wasFollowing=followMode; stopFollow(); }
+  // Show exactly one view container.
+  mv.classList.toggle('on', v==="map");
+  if(cv) cv.classList.toggle('on', v==="calendar");
+  mn.style.display = (v==="map"||v==="calendar") ? "none" : "";
+  document.body.classList.toggle('cal-view', v==="calendar");
+  // The View button always toggles between Map and List (Calendar has its own btn).
   if(v==="map"){
-    mv.classList.add('on'); mn.style.display="none";
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg> List`;
-    render();
-    // Coming back to the map: resume GPS following where you are now. _wasFollowing
-    // remembers you were driving before you popped into the list. Guarded so we
-    // never double-start. Small delay lets the map container finish laying out.
-    if(_wasFollowing && !followMode){
-      setTimeout(()=>{ try{ if(state.view==="map" && !followMode) startFollow(); }catch(e){} }, 200);
-    }
   } else {
-    mv.classList.remove('on'); mn.style.display="";
-    _wasFollowing = followMode;        // remember so we can resume on return
-    if(followMode){ stopFollow(); }    // leaving the map stops GPS tracking (battery)
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg> Map`;
-    render();
   }
+  // Calendar button active state.
+  const cb=document.getElementById('btnCal'); if(cb) cb.classList.toggle('on', v==="calendar");
+  if(v==="calendar"){ renderCalendar(); }
+  else { render(); }
+  // Returning to the map resumes following where you are now (if you were before).
+  if(v==="map" && _wasFollowing && !followMode){
+    setTimeout(()=>{ try{ if(state.view==="map" && !followMode) startFollow(); }catch(e){} }, 200);
+  }
+}
+// ---- CALENDAR VIEW: month grid of visits -----------------------------------
+// Reps see their own visits. Admins see everyone, with a rep filter (All / name).
+let _calYear=null, _calMonth=null, _calSelDay=null;
+let _calRepFilter="__me__";  // "__me__" = current rep, "__all__" = everyone, else a rep name
+const _MNAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const _DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+// Resolve the rep a visit belongs to: its recorded rep, else the office's addedBy,
+// else "" (unattributable).
+function visitRep(o,v){
+  const vr=String(v.rep||"").replace(/\s+/g," ").trim();
+  if(vr) return vr;
+  const ab=String(o.addedBy||"").trim();
+  return ab;
+}
+// Build {dateStr -> [{o,v}]} honoring the active filter.
+//  - non-admins: always just their own visits (filter ignored)
+//  - admin "All": everyone; admin <name>: that rep only
+function repVisitsByDate(){
+  const admin=isAdmin();
+  const me=meName().toLowerCase();
+  let want=null;            // null = all; otherwise lowercase rep name to match
+  if(!admin){ want=me; }    // reps locked to themselves
+  else if(_calRepFilter==="__me__"){ want=me; }
+  else if(_calRepFilter==="__all__"){ want=null; }
+  else { want=String(_calRepFilter||"").toLowerCase(); }
+  const map={};
+  (DB||[]).forEach(o=>{
+    if(!o.visits) return;
+    o.visits.forEach(v=>{
+      if(!v||!v.date) return;
+      const rep=visitRep(o,v).toLowerCase();
+      if(want!==null){ if(rep!==want) return; }   // specific rep
+      (map[v.date]=map[v.date]||[]).push({o,v});
+    });
+  });
+  return map;
+}
+function renderCalendar(){
+  const host=document.getElementById('calview'); if(!host) return;
+  if(!meName()){
+    host.innerHTML=`<div class="cal-empty"><h3>Who are you?</h3><p>Set your name to see your visit calendar.</p><button class="cal-setme" id="calSetMe">Set who you are</button></div>`;
+    const b=document.getElementById('calSetMe'); if(b) b.onclick=openWhoAmI;
+    return;
+  }
+  const today=new Date();
+  if(_calYear==null){ _calYear=today.getFullYear(); _calMonth=today.getMonth(); }
+  const byDate=repVisitsByDate();
+  // first day-of-week + number of days in the viewed month
+  const first=new Date(_calYear,_calMonth,1);
+  const startDow=first.getDay();
+  const daysInMonth=new Date(_calYear,_calMonth+1,0).getDate();
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  // month totals
+  let monthVisits=0, monthDays=0;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(byDate[ds]){ monthVisits+=byDate[ds].length; monthDays++; }
+  }
+  // build day cells (leading blanks for alignment)
+  let cells="";
+  for(let i=0;i<startDow;i++) cells+=`<div class="cal-cell blank"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hits=byDate[ds]?byDate[ds].length:0;
+    const isToday=ds===todayStr;
+    const isSel=ds===_calSelDay;
+    cells+=`<button class="cal-cell${hits?' has':''}${isToday?' today':''}${isSel?' sel':''}" data-day="${ds}">`+
+      `<span class="cal-dnum">${d}</span>`+
+      `${hits?`<span class="cal-badge">${hits}</span>`:''}`+
+    `</button>`;
+  }
+  const dowHead=_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  // Admin gets a rep picker: My visits / Everyone / each rep by name.
+  const admin=isAdmin();
+  let pickerHTML="", whoLabel=meName();
+  if(admin){
+    const opts=[`<option value="__me__"${_calRepFilter==="__me__"?' selected':''}>My visits (${esc(meName())})</option>`,
+                `<option value="__all__"${_calRepFilter==="__all__"?' selected':''}>Everyone</option>`]
+      .concat((REPS||[]).map(r=>{ const nm=String(r.name||""); return `<option value="${esc(nm)}"${_calRepFilter.toLowerCase()===nm.toLowerCase()?' selected':''}>${esc(nm)}</option>`; }));
+    pickerHTML=`<div class="cal-pick-wrap"><select class="cal-pick" id="calRepPick">${opts.join('')}</select></div>`;
+    whoLabel = _calRepFilter==="__all__" ? "Everyone" : (_calRepFilter==="__me__"?meName():_calRepFilter);
+  }
+  host.innerHTML=
+    `<div class="cal-wrap">`+
+      `<div class="cal-top">`+
+        `<button class="cal-nav" id="calPrev" aria-label="Previous month">‹</button>`+
+        `<div class="cal-title">${_MNAMES[_calMonth]} ${_calYear}</div>`+
+        `<button class="cal-nav" id="calNext" aria-label="Next month">›</button>`+
+      `</div>`+
+      pickerHTML+
+      `<div class="cal-sub">${esc(whoLabel)} · ${monthVisits} visit${monthVisits===1?'':'s'} on ${monthDays} day${monthDays===1?'':'s'}</div>`+
+      `<div class="cal-grid cal-dowrow">${dowHead}</div>`+
+      `<div class="cal-grid cal-days">${cells}</div>`+
+      `<div class="cal-day-detail" id="calDayDetail"></div>`+
+    `</div>`;
+  document.getElementById('calPrev').onclick=()=>{ _calMonth--; if(_calMonth<0){_calMonth=11;_calYear--;} _calSelDay=null; renderCalendar(); };
+  document.getElementById('calNext').onclick=()=>{ _calMonth++; if(_calMonth>11){_calMonth=0;_calYear++;} _calSelDay=null; renderCalendar(); };
+  const pick=document.getElementById('calRepPick');
+  if(pick) pick.onchange=(e)=>{ _calRepFilter=e.target.value; _calSelDay=null; renderCalendar(); };
+  host.querySelectorAll('[data-day]').forEach(b=>{ b.onclick=()=>{ const ds=b.getAttribute('data-day');
+    _calSelDay = (_calSelDay===ds)?null:ds; renderCalendar(); }; });
+  if(_calSelDay) renderCalDayDetail(byDate[_calSelDay]||[], _calSelDay);
+}
+function renderCalDayDetail(items, ds){
+  const host=document.getElementById('calDayDetail'); if(!host) return;
+  if(!items.length){ host.innerHTML=`<div class="cal-dd-empty">No visits logged on ${esc(fmtDate(ds))}.</div>`; return; }
+  // Show the rep name on each row when viewing everyone or another rep (admin).
+  const showRep = isAdmin() && _calRepFilter!=="__me__";
+  const sorted=items.slice().sort((a,b)=>String(a.o.name||"").localeCompare(String(b.o.name||"")));
+  const rows=sorted.map(({o,v})=>{
+    const dot=v.color?`<span class="cal-dot" style="background:${VCOLORS[v.color]||'#ccc'}"></span>`:`<span class="cal-dot" style="background:var(--line-strong)"></span>`;
+    const note=v.note?`<span class="cal-note">${esc(v.note)}</span>`:'';
+    const lbl=v.color&&VLABEL[v.color]?`<span class="cal-vlabel">${esc(VLABEL[v.color])}</span>`:'';
+    const who = showRep ? `<span class="cal-rep">${esc(visitRep(o,v)||'Unknown')}</span>` : '';
+    return `<button class="cal-dd-row" data-oid="${esc(o.id)}">${dot}<span class="cal-dd-nm">${esc(o.name||'(unnamed office)')}</span>${who}${lbl}${note}</button>`;
+  }).join('');
+  host.innerHTML=`<div class="cal-dd-head">${esc(fmtDate(ds))} · ${items.length} visit${items.length===1?'':'s'}</div>${rows}`;
+  host.querySelectorAll('[data-oid]').forEach(b=>{ b.onclick=()=>openDetail(b.getAttribute('data-oid')); });
 }
 function mapEmbed(o){
   if(o.lat&&o.lng) return `https://maps.google.com/maps?q=${o.lat},${o.lng}&z=16&output=embed`;
@@ -1719,6 +1929,18 @@ function saveForm(id,getScan,getVisits,getActive){
     phone:g('f_phone'),email:g('f_email'),scanner:getScan(),lab:g('f_lab'),
     drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes'),visits,
     active:(getActive?getActive():true)};
+  // AUTO-LOG A VISIT ON EDIT: if this is an existing office and the rep actually
+  // changed a field (note, scanner, hours, etc. — or the visit list itself),
+  // record a visit dated today (carrying the last status color), so they don't
+  // have to tap "Log visit". One per day max (ensureVisitToday guards that).
+  if(id && existing){
+    const fields=["name","addr","city","zip","phone","email","scanner","lab","drs","hours","visitDay","notes"];
+    const fieldChanged=fields.some(k=>String((data[k]==null?"":data[k]))!==String((existing[k]==null?"":existing[k])));
+    const visitsChanged=visitsToString(visits)!==visitsToString(parseVisits(existing.visits));
+    if(fieldChanged||visitsChanged){
+      data.visits=ensureVisitToday(data.visits, lastColor(existing));
+    }
+  }
   pushUndo(id?"edit "+name:"add "+name);
   if(!id){
     data.id="c"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -1757,11 +1979,13 @@ function quickNote(id){
   const stamp=new Date().toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
   const line=`[${stamp}] ${txt}`;
   const newNotes = o.notes ? (o.notes.trimEnd()+"\n"+line) : line;
+  // A quick-note from the field IS a visit — auto-log today (carry last color, max one/day).
+  const newVisits=ensureVisitToday(o.visits, lastColor(o));
   if(id[0]==="s"){
     const idx=parseInt(id.slice(1),10);
-    store.over[idx]=Object.assign({},store.over[idx],{notes:newNotes,visited:true});
+    store.over[idx]=Object.assign({},store.over[idx],{notes:newNotes,visited:true,visits:newVisits});
   } else {
-    const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; }
+    const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; a.visits=newVisits; }
   }
   save(true); rebuild(); render();
   // re-open this marker's popup with the freshly saved note
@@ -2209,6 +2433,7 @@ function wire(){
   on('btnSync','click',openSync);
   on('meBadge','click',openWhoAmI);
   on('btnView','click',()=>setView(state.view==="map"?"list":"map"));
+  on('btnCal','click',()=>setView(state.view==="calendar"?"list":"calendar"));
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
   on('routeBtn','click',openRoute);
@@ -2254,7 +2479,7 @@ function wire(){
     }
     if(!cloudOn) return;
     pulling=false; pushing=false;
-    try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
+    try{ const changed=await cloudPull(); if(changed){ rebuild(); renderActive(); } }catch(e){}
     if(!pollTimer) cloudSubscribe();
   });
   window.addEventListener('focus',()=>{ if(cloudOn&&!pollTimer) cloudSubscribe(); });
@@ -2308,6 +2533,14 @@ function startOnMapFollowing(){
     if(state.view!=="map") setView("map");
     // Give the map container a beat to lay out, then start following.
     setTimeout(()=>{ try{ if(!followMode) startFollow(); }catch(e){} }, 250);
+    // iOS Chrome often silently ignores a geolocation request that wasn't started
+    // by a user tap, so the auto-start can leave us "following" with no fix ever
+    // arriving (banner never appears, button stuck pulsing). If that happens,
+    // reset to a clean state after a few seconds so the user's first tap on the
+    // locate button cleanly starts follow via a real gesture (which Chrome honors).
+    setTimeout(()=>{
+      try{ if(followMode && !userPos){ stopFollow(); } }catch(e){}
+    }, 5200);
   }catch(e){}
 }
 
@@ -2317,6 +2550,21 @@ function startOnMapFollowing(){
 window.addEventListener('pageshow',(e)=>{
   if(state.view==="map" && !followMode){ startOnMapFollowing(); }
 });
+
+// Mobile Chrome (and Safari) show/hide their toolbars as you scroll, which changes
+// the VISIBLE viewport height. Leaflet measures its container once and won't notice,
+// so the map can end up sized to the wrong height — tiles overflow / controls overlap.
+// Re-fit the map (debounced) whenever the viewport changes or the device rotates.
+let _vpResizeT=null;
+function _refitMapSoon(){
+  if(_vpResizeT) clearTimeout(_vpResizeT);
+  _vpResizeT=setTimeout(()=>{
+    try{ if(mapObj && state.view==="map"){ mapObj.invalidateSize(false); } }catch(e){}
+  },180);
+}
+window.addEventListener('resize', _refitMapSoon);
+window.addEventListener('orientationchange', ()=>{ _refitMapSoon(); setTimeout(_refitMapSoon,500); });
+if(window.visualViewport){ window.visualViewport.addEventListener('resize', _refitMapSoon); }
 </script>
 </body>
 </html>
