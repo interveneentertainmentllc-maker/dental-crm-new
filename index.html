@@ -43,6 +43,14 @@ input,textarea,select{font-family:inherit;font-size:16px;}
 
 header{padding:calc(var(--safe-top) + 14px) 16px 10px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
 header .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+header .ht>div:first-child{min-width:0;}
+.hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;}
+.hbtn{white-space:nowrap;flex:0 0 auto;}
+@media (max-width:360px){
+  .hbtns{gap:4px;}
+  .hbtn{padding:8px 8px;font-size:11px;gap:4px;}
+  header h1{font-size:18px;}
+}
 header h1{font-family:var(--display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;}
 header .sub{font-size:11px;color:#9fc7be;font-family:var(--mono);margin-top:2px;}
 .synclink{display:inline-flex;align-items:center;gap:5px;margin-top:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cfe7e1;font-size:10.5px;font-family:var(--mono);padding:3px 8px;border-radius:20px;cursor:pointer;}
@@ -90,6 +98,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .empty h3{font-family:var(--display);color:var(--ink-soft);margin:0 0 6px;}
 
 .fab{position:fixed;bottom:calc(var(--safe-bottom) + 18px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:30;pointer-events:none;}
+body.cal-view .fab{display:none;}
 .fab>*{pointer-events:auto;}
 .fab-add{flex:1;background:var(--teal);color:#fff;border-radius:14px;padding:15px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:var(--shadow-lg);}
 .fab-add:active{background:var(--teal-deep);}
@@ -234,6 +243,42 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 #mapview{display:none;flex:1;position:relative;z-index:1;}
 #mapview.on{display:flex;}
 body.sheet-open #mapview{z-index:0;}
+/* ---- calendar view ---- */
+#calview{display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--paper);}
+#calview.on{display:block;}
+.cal-wrap{max-width:560px;margin:0 auto;padding:14px 14px calc(var(--safe-bottom) + 100px);}
+.cal-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+.cal-title{font-family:var(--display);font-size:21px;font-weight:700;color:var(--ink);}
+.cal-nav{width:40px;height:40px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:22px;line-height:1;color:var(--teal-deep);font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);}
+.cal-nav:active{background:var(--teal-wash);}
+.cal-sub{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-bottom:12px;}
+.cal-pick-wrap{margin:8px 0 10px;}
+.cal-pick{width:100%;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:15px;font-weight:600;color:var(--ink);box-shadow:var(--shadow);-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230e6a73' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 14px center;}
+.cal-rep{flex:0 1 auto;min-width:0;max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:700;color:var(--teal-deep);background:var(--teal-wash);border-radius:8px;padding:3px 8px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+.cal-dowrow{margin-bottom:5px;}
+.cal-dow{text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-faint);padding:2px 0;}
+.cal-cell{position:relative;aspect-ratio:1/1;border-radius:10px;background:#fff;border:1px solid var(--line);display:flex;align-items:flex-start;justify-content:flex-start;padding:5px 0 0 7px;}
+.cal-cell.blank{background:transparent;border:none;}
+.cal-cell .cal-dnum{font-size:13px;color:var(--ink-soft);font-weight:600;}
+.cal-cell.has{background:var(--teal-wash);border-color:var(--teal);}
+.cal-cell.has .cal-dnum{color:var(--teal-deep);font-weight:800;}
+.cal-cell.today{box-shadow:0 0 0 2px var(--teal) inset;}
+.cal-cell.sel{background:var(--teal);border-color:var(--teal-deep);}
+.cal-cell.sel .cal-dnum{color:#fff;}
+.cal-cell.sel .cal-badge{background:#fff;color:var(--teal-deep);}
+.cal-badge{position:absolute;bottom:5px;right:6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--teal-deep);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.cal-day-detail{margin-top:16px;}
+.cal-dd-head{font-weight:700;font-size:15px;color:var(--ink);margin-bottom:8px;}
+.cal-dd-row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:7px;}
+.cal-dd-row:active{background:var(--teal-wash);}
+.cal-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+.cal-dd-nm{flex:1 1 auto;min-width:0;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-vlabel{flex:0 0 auto;font-size:11px;font-weight:700;color:var(--teal-deep);background:var(--teal-wash);border-radius:8px;padding:3px 8px;}
+.cal-note{flex:0 1 auto;min-width:0;font-size:11px;color:var(--ink-soft);background:var(--paper);border-radius:8px;padding:3px 8px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-dd-empty,.cal-empty{text-align:center;color:var(--ink-soft);padding:24px 16px;}
+.cal-empty h3{color:var(--ink);margin:0 0 6px;}
+.cal-setme{margin-top:12px;background:var(--teal);color:#fff;border-radius:12px;padding:10px 18px;font-weight:700;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
@@ -305,6 +350,10 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
       <button class="hbtn" id="btnView" aria-label="Toggle map view">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg>
         Map
+      </button>
+      <button class="hbtn" id="btnCal" aria-label="Calendar of my visits">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        Calendar
       </button>
       <button class="hbtn" id="btnExport" aria-label="Export">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
@@ -379,6 +428,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
     <span>Route</span>
   </button>
 </div>
+<div id="calview"></div>
 </div>
 
 <div class="fab">
@@ -426,7 +476,7 @@ function loadMe(){
   try{const id=localStorage.getItem(ME_KEY); ME=id?repById(id):null;}catch(e){ME=null;}
   if(ME && !repById(ME.id)) ME=null;
 }
-function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.setItem(ME_KEY,id);}catch(e){} }
+function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.setItem(ME_KEY,id);}catch(e){} _calRepFilter="__me__"; }
 function isAdmin(){ return !!(ME&&ME.role==="admin"); }
 function meName(){ return ME?String(ME.name||"").replace(/\s+/g," ").trim():""; }
 function repTerritory(){ return ME?(ME.territory||""):""; }
@@ -664,7 +714,7 @@ function cloudSubscribe(){
       if(document.hidden||pushing||pulling) return;
       try{
         const changed=await cloudPull();
-        if(changed){ rebuild(); render(); toast("Updated from the Sheet"); }
+        if(changed){ rebuild(); renderActive(); toast("Updated from the Sheet"); }
       }catch(e){}
       setSyncBadge();
     },POLL_MS);
@@ -678,7 +728,7 @@ function cloudSubscribe(){
       if(!pollTimer || stale){
         pulling=false; pushing=false;
         if(!pollTimer) cloudSubscribe();
-        try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
+        try{ const changed=await cloudPull(); if(changed){ rebuild(); renderActive(); } }catch(e){}
         setSyncBadge();
       }
     },POLL_MS*2);
@@ -968,6 +1018,9 @@ function render(){
     }catch(_){}
   }
 }
+// Repaint whichever view is currently showing (used after a background sync so a
+// visible calendar/list/map all stay fresh).
+function renderActive(){ if(state.view==="calendar") renderCalendar(); else render(); }
 // Re-filter and repaint the list/map WITHOUT rebuilding the More drawer, so an
 // open native date picker isn't destroyed mid-selection. Used by the date inputs.
 let _skipDrawerRebuild=false;
@@ -1493,25 +1546,148 @@ function toggleNearby(){
 }
 function setView(v){
   state.view=v;
-  const mv=document.getElementById('mapview'), mn=document.getElementById('main');
+  const mv=document.getElementById('mapview'), mn=document.getElementById('main'), cv=document.getElementById('calview');
   const btn=document.getElementById('btnView');
+  // Leaving the map always stops GPS tracking (battery); remember so we can resume.
+  if(v!=="map" && followMode){ _wasFollowing=followMode; stopFollow(); }
+  // Show exactly one view container.
+  mv.classList.toggle('on', v==="map");
+  if(cv) cv.classList.toggle('on', v==="calendar");
+  mn.style.display = (v==="map"||v==="calendar") ? "none" : "";
+  document.body.classList.toggle('cal-view', v==="calendar");
+  // The View button always toggles between Map and List (Calendar has its own btn).
   if(v==="map"){
-    mv.classList.add('on'); mn.style.display="none";
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18M3 12h18M3 18h18"/></svg> List`;
-    render();
-    // Coming back to the map: resume GPS following where you are now. _wasFollowing
-    // remembers you were driving before you popped into the list. Guarded so we
-    // never double-start. Small delay lets the map container finish laying out.
-    if(_wasFollowing && !followMode){
-      setTimeout(()=>{ try{ if(state.view==="map" && !followMode) startFollow(); }catch(e){} }, 200);
-    }
   } else {
-    mv.classList.remove('on'); mn.style.display="";
-    _wasFollowing = followMode;        // remember so we can resume on return
-    if(followMode){ stopFollow(); }    // leaving the map stops GPS tracking (battery)
     btn.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z"/><path d="M9 3v15M15 6v15"/></svg> Map`;
-    render();
   }
+  // Calendar button active state.
+  const cb=document.getElementById('btnCal'); if(cb) cb.classList.toggle('on', v==="calendar");
+  if(v==="calendar"){ renderCalendar(); }
+  else { render(); }
+  // Returning to the map resumes following where you are now (if you were before).
+  if(v==="map" && _wasFollowing && !followMode){
+    setTimeout(()=>{ try{ if(state.view==="map" && !followMode) startFollow(); }catch(e){} }, 200);
+  }
+}
+// ---- CALENDAR VIEW: month grid of visits -----------------------------------
+// Reps see their own visits. Admins see everyone, with a rep filter (All / name).
+let _calYear=null, _calMonth=null, _calSelDay=null;
+let _calRepFilter="__me__";  // "__me__" = current rep, "__all__" = everyone, else a rep name
+const _MNAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const _DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+// Resolve the rep a visit belongs to: its recorded rep, else the office's addedBy,
+// else "" (unattributable).
+function visitRep(o,v){
+  const vr=String(v.rep||"").replace(/\s+/g," ").trim();
+  if(vr) return vr;
+  const ab=String(o.addedBy||"").trim();
+  return ab;
+}
+// Build {dateStr -> [{o,v}]} honoring the active filter.
+//  - non-admins: always just their own visits (filter ignored)
+//  - admin "All": everyone; admin <name>: that rep only
+function repVisitsByDate(){
+  const admin=isAdmin();
+  const me=meName().toLowerCase();
+  let want=null;            // null = all; otherwise lowercase rep name to match
+  if(!admin){ want=me; }    // reps locked to themselves
+  else if(_calRepFilter==="__me__"){ want=me; }
+  else if(_calRepFilter==="__all__"){ want=null; }
+  else { want=String(_calRepFilter||"").toLowerCase(); }
+  const map={};
+  (DB||[]).forEach(o=>{
+    if(!o.visits) return;
+    o.visits.forEach(v=>{
+      if(!v||!v.date) return;
+      const rep=visitRep(o,v).toLowerCase();
+      if(want!==null){ if(rep!==want) return; }   // specific rep
+      (map[v.date]=map[v.date]||[]).push({o,v});
+    });
+  });
+  return map;
+}
+function renderCalendar(){
+  const host=document.getElementById('calview'); if(!host) return;
+  if(!meName()){
+    host.innerHTML=`<div class="cal-empty"><h3>Who are you?</h3><p>Set your name to see your visit calendar.</p><button class="cal-setme" id="calSetMe">Set who you are</button></div>`;
+    const b=document.getElementById('calSetMe'); if(b) b.onclick=openWhoAmI;
+    return;
+  }
+  const today=new Date();
+  if(_calYear==null){ _calYear=today.getFullYear(); _calMonth=today.getMonth(); }
+  const byDate=repVisitsByDate();
+  // first day-of-week + number of days in the viewed month
+  const first=new Date(_calYear,_calMonth,1);
+  const startDow=first.getDay();
+  const daysInMonth=new Date(_calYear,_calMonth+1,0).getDate();
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  // month totals
+  let monthVisits=0, monthDays=0;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(byDate[ds]){ monthVisits+=byDate[ds].length; monthDays++; }
+  }
+  // build day cells (leading blanks for alignment)
+  let cells="";
+  for(let i=0;i<startDow;i++) cells+=`<div class="cal-cell blank"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hits=byDate[ds]?byDate[ds].length:0;
+    const isToday=ds===todayStr;
+    const isSel=ds===_calSelDay;
+    cells+=`<button class="cal-cell${hits?' has':''}${isToday?' today':''}${isSel?' sel':''}" data-day="${ds}">`+
+      `<span class="cal-dnum">${d}</span>`+
+      `${hits?`<span class="cal-badge">${hits}</span>`:''}`+
+    `</button>`;
+  }
+  const dowHead=_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  // Admin gets a rep picker: My visits / Everyone / each rep by name.
+  const admin=isAdmin();
+  let pickerHTML="", whoLabel=meName();
+  if(admin){
+    const opts=[`<option value="__me__"${_calRepFilter==="__me__"?' selected':''}>My visits (${esc(meName())})</option>`,
+                `<option value="__all__"${_calRepFilter==="__all__"?' selected':''}>Everyone</option>`]
+      .concat((REPS||[]).map(r=>{ const nm=String(r.name||""); return `<option value="${esc(nm)}"${_calRepFilter.toLowerCase()===nm.toLowerCase()?' selected':''}>${esc(nm)}</option>`; }));
+    pickerHTML=`<div class="cal-pick-wrap"><select class="cal-pick" id="calRepPick">${opts.join('')}</select></div>`;
+    whoLabel = _calRepFilter==="__all__" ? "Everyone" : (_calRepFilter==="__me__"?meName():_calRepFilter);
+  }
+  host.innerHTML=
+    `<div class="cal-wrap">`+
+      `<div class="cal-top">`+
+        `<button class="cal-nav" id="calPrev" aria-label="Previous month">‹</button>`+
+        `<div class="cal-title">${_MNAMES[_calMonth]} ${_calYear}</div>`+
+        `<button class="cal-nav" id="calNext" aria-label="Next month">›</button>`+
+      `</div>`+
+      pickerHTML+
+      `<div class="cal-sub">${esc(whoLabel)} · ${monthVisits} visit${monthVisits===1?'':'s'} on ${monthDays} day${monthDays===1?'':'s'}</div>`+
+      `<div class="cal-grid cal-dowrow">${dowHead}</div>`+
+      `<div class="cal-grid cal-days">${cells}</div>`+
+      `<div class="cal-day-detail" id="calDayDetail"></div>`+
+    `</div>`;
+  document.getElementById('calPrev').onclick=()=>{ _calMonth--; if(_calMonth<0){_calMonth=11;_calYear--;} _calSelDay=null; renderCalendar(); };
+  document.getElementById('calNext').onclick=()=>{ _calMonth++; if(_calMonth>11){_calMonth=0;_calYear++;} _calSelDay=null; renderCalendar(); };
+  const pick=document.getElementById('calRepPick');
+  if(pick) pick.onchange=(e)=>{ _calRepFilter=e.target.value; _calSelDay=null; renderCalendar(); };
+  host.querySelectorAll('[data-day]').forEach(b=>{ b.onclick=()=>{ const ds=b.getAttribute('data-day');
+    _calSelDay = (_calSelDay===ds)?null:ds; renderCalendar(); }; });
+  if(_calSelDay) renderCalDayDetail(byDate[_calSelDay]||[], _calSelDay);
+}
+function renderCalDayDetail(items, ds){
+  const host=document.getElementById('calDayDetail'); if(!host) return;
+  if(!items.length){ host.innerHTML=`<div class="cal-dd-empty">No visits logged on ${esc(fmtDate(ds))}.</div>`; return; }
+  // Show the rep name on each row when viewing everyone or another rep (admin).
+  const showRep = isAdmin() && _calRepFilter!=="__me__";
+  const sorted=items.slice().sort((a,b)=>String(a.o.name||"").localeCompare(String(b.o.name||"")));
+  const rows=sorted.map(({o,v})=>{
+    const dot=v.color?`<span class="cal-dot" style="background:${VCOLORS[v.color]||'#ccc'}"></span>`:`<span class="cal-dot" style="background:var(--line-strong)"></span>`;
+    const note=v.note?`<span class="cal-note">${esc(v.note)}</span>`:'';
+    const lbl=v.color&&VLABEL[v.color]?`<span class="cal-vlabel">${esc(VLABEL[v.color])}</span>`:'';
+    const who = showRep ? `<span class="cal-rep">${esc(visitRep(o,v)||'Unknown')}</span>` : '';
+    return `<button class="cal-dd-row" data-oid="${esc(o.id)}">${dot}<span class="cal-dd-nm">${esc(o.name||'(unnamed office)')}</span>${who}${lbl}${note}</button>`;
+  }).join('');
+  host.innerHTML=`<div class="cal-dd-head">${esc(fmtDate(ds))} · ${items.length} visit${items.length===1?'':'s'}</div>${rows}`;
+  host.querySelectorAll('[data-oid]').forEach(b=>{ b.onclick=()=>openDetail(b.getAttribute('data-oid')); });
 }
 function mapEmbed(o){
   if(o.lat&&o.lng) return `https://maps.google.com/maps?q=${o.lat},${o.lng}&z=16&output=embed`;
@@ -2209,6 +2385,7 @@ function wire(){
   on('btnSync','click',openSync);
   on('meBadge','click',openWhoAmI);
   on('btnView','click',()=>setView(state.view==="map"?"list":"map"));
+  on('btnCal','click',()=>setView(state.view==="calendar"?"list":"calendar"));
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
   on('routeBtn','click',openRoute);
@@ -2254,7 +2431,7 @@ function wire(){
     }
     if(!cloudOn) return;
     pulling=false; pushing=false;
-    try{ const changed=await cloudPull(); if(changed){ rebuild(); render(); } }catch(e){}
+    try{ const changed=await cloudPull(); if(changed){ rebuild(); renderActive(); } }catch(e){}
     if(!pollTimer) cloudSubscribe();
   });
   window.addEventListener('focus',()=>{ if(cloudOn&&!pollTimer) cloudSubscribe(); });
