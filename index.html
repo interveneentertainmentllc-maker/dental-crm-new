@@ -1253,7 +1253,54 @@ function buildMap(){
       mapObj._resumeT=setTimeout(()=>{ userMovedMap=false; },6000);
     }
   });
+  // ---- LONG-PRESS TO DROP A PIN AT A NEW OFFICE ----
+  // Press and hold anywhere on the map (~600ms) to drop a pin at that exact spot.
+  // We grab the lat/lng immediately, then look up the street address in the
+  // background (free OpenStreetMap Nominatim) and open Add Office pre-filled.
+  let _lpTimer=null, _lpStart=null;
+  function cancelLongPress(){ if(_lpTimer){ clearTimeout(_lpTimer); _lpTimer=null; } _lpStart=null; }
+  function startLongPress(latlng, x, y){
+    cancelLongPress();
+    _lpStart={x:x,y:y};
+    _lpTimer=setTimeout(()=>{ _lpTimer=null; dropPinAt(latlng); }, 600);
+  }
+  mapObj.on('mousedown', (e)=>{ if(e.originalEvent&&e.originalEvent.button) return; startLongPress(e.latlng, e.containerPoint.x, e.containerPoint.y); });
+  mapObj.on('mouseup', cancelLongPress);
+  // If the finger/cursor moves more than a few px, it's a pan, not a long-press.
+  mapObj.on('mousemove', (e)=>{ if(_lpStart){ const dx=Math.abs(e.containerPoint.x-_lpStart.x), dy=Math.abs(e.containerPoint.y-_lpStart.y); if(dx>8||dy>8) cancelLongPress(); } });
+  mapObj.on('dragstart zoomstart movestart', cancelLongPress);
   mapBuilt=true;
+}
+// Reverse-geocode a point to a street address via OpenStreetMap Nominatim (free,
+// no key). Returns {addr,city,zip} or {} on any failure — the pin still works
+// even if the lookup fails, since lat/lng are captured regardless.
+async function reverseGeocode(lat, lng){
+  try{
+    const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lng)+"&zoom=18&addressdetails=1";
+    const res=await fetch(url,{headers:{"Accept":"application/json"}});
+    if(!res.ok) return {};
+    const d=await res.json(); const a=d&&d.address?d.address:{};
+    const house=a.house_number||""; const road=a.road||"";
+    const addr=(house?house+" ":"")+road;
+    const city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||"";
+    const zip=a.postcode||"";
+    return {addr:addr.trim(), city:city, zip:zip};
+  }catch(e){ return {}; }
+}
+let _dropMarker=null;
+function dropPinAt(latlng){
+  const lat=+latlng.lat.toFixed(6), lng=+latlng.lng.toFixed(6);
+  // visual pin so the rep sees exactly where they dropped
+  try{ if(_dropMarker) mapObj.removeLayer(_dropMarker); }catch(e){}
+  try{ _dropMarker=L.marker([lat,lng]).addTo(mapObj); }catch(e){}
+  if(navigator.vibrate){ try{navigator.vibrate(15);}catch(e){} }
+  toast("📍 Pin dropped — looking up address…");
+  reverseGeocode(lat,lng).then(info=>{
+    openForm(null, {lat:lat, lng:lng, addr:info.addr||"", city:info.city||"", zip:info.zip||""});
+    if(info.addr||info.city){ toast("Address found — check & name the office"); }
+    else { toast("Couldn't find an address — pin saved, type the rest"); }
+    try{ if(_dropMarker){ mapObj.removeLayer(_dropMarker); _dropMarker=null; } }catch(e){}
+  });
 }
 function popupHTML(o){
   const scOn=o.scanner&&o.scanner!=="None"&&o.scanner!=="";
@@ -1767,10 +1814,12 @@ function openDetail(id){
 }
 
 /* ---------- edit / add form ---------- */
-function openForm(id){
+function openForm(id, prefill){
   if(mapObj){try{mapObj.closePopup();}catch(e){}}
   const isNew=!id;
   const o=isNew?{name:"",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visits:[]}:officeById(id);
+  if(isNew && prefill){ if(prefill.lat!=null)o.lat=prefill.lat; if(prefill.lng!=null)o.lng=prefill.lng;
+    if(prefill.addr)o.addr=prefill.addr; if(prefill.city)o.city=prefill.city; if(prefill.zip)o.zip=prefill.zip; }
   document.getElementById('sheetTitle').textContent=isNew?"Add Office":"Edit Office";
   document.getElementById('sheetBody').innerHTML=`
     <div class="fld"><label>Practice Name *</label><input id="f_name" value="${esc(o.name)}" placeholder="e.g. Smile Dental"></div>
@@ -1790,6 +1839,7 @@ function openForm(id){
         </button>
         <div class="pinstatus" id="f_pinstatus">${(o.lat&&o.lng)?("📍 "+(+o.lat).toFixed(5)+", "+(+o.lng).toFixed(5)):"No pin set"}</div>
       </div>
+      <div class="dictate-hint" style="display:block;">Tip: you can also press &amp; hold anywhere on the map to drop a pin there — it'll fill in the address automatically.</div>
       <div class="row2" style="margin-top:8px;">
         <div class="fld" style="margin-bottom:0;"><label>Latitude</label><input id="f_lat" value="${esc(String(o.lat||''))}" inputmode="decimal" placeholder="41.88"></div>
         <div class="fld" style="margin-bottom:0;"><label>Longitude</label><input id="f_lng" value="${esc(String(o.lng||''))}" inputmode="decimal" placeholder="-87.63"></div>
