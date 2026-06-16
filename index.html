@@ -132,6 +132,8 @@ body.cal-view .fab{display:none;}
 .fld input,.fld textarea,.fld select{width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:11px;padding:13px 12px;color:var(--ink);}
 .fld textarea{min-height:80px;resize:vertical;line-height:1.5;}
 .fld input:focus,.fld textarea:focus,.fld select:focus{outline:none;border-color:var(--teal);}
+.dictate-hint{display:none;font-size:11.5px;color:var(--ink-soft);line-height:1.45;margin-top:6px;}
+@media (hover:none) and (pointer:coarse){ .dictate-hint{display:block;} }
 .pinbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .visitbox{display:flex;flex-direction:column;gap:9px;}
 .visitadd{display:flex;gap:8px;align-items:center;}
@@ -1215,39 +1217,6 @@ function routeAppleURL(ordered, startLat, startLng){
   const saddr=(startLat!=null&&startLng!=null)?(startLat+","+startLng):"";
   return "https://maps.apple.com/?"+(saddr?("saddr="+encodeURIComponent(saddr)+"&"):"")+"daddr="+encodeURIComponent(daddr)+"&dirflg=d";
 }
-// Google Maps multi-stop. Match Apple's behavior: when we DON'T have the rep's
-// GPS, leave the origin EMPTY so Google Maps fills in the device's current
-// location (exactly like Apple omits saddr). When we DO have GPS, use it as
-// the explicit origin. The earlier offices become waypoints and the last is
-// the destination.
-function routeGoogleURL(ordered, startLat, startLng){
-  if(!ordered.length) return "";
-  // Google Maps on a MOBILE browser only reliably handles a small number of
-  // waypoints (about 3 intermediate stops). Sending more makes the route
-  // silently fail to plot or drops stops. So for Google we cap the list to a
-  // mobile-safe size: with a GPS origin that's up to ~4 offices (3 waypoints +
-  // destination); without an explicit origin the user's location is the start,
-  // so we can keep one more office. Apple Maps handles more and is left uncapped.
-  const hasOrigin=(startLat!=null&&startLng!=null);
-  const MOBILE_MAX = hasOrigin ? 4 : 5;   // total offices Google will route on mobile
-  const list = ordered.slice(0, MOBILE_MAX);
-  const coords=list.map(o=>o.lat+","+o.lng);
-  const origin=hasOrigin?(startLat+","+startLng):"";   // "" -> Google uses current location
-  const destination=coords[coords.length-1];
-  // every office except the final destination is a waypoint
-  const mid=coords.slice(0,-1);
-  let url="https://www.google.com/maps/dir/?api=1"
-        + (origin?("&origin="+encodeURIComponent(origin)):"")
-        + "&destination="+encodeURIComponent(destination)
-        + "&travelmode=driving";
-  if(mid.length) url+="&waypoints="+encodeURIComponent(mid.join("|"));
-  return url;
-}
-// How many of the ordered stops Google will actually route on mobile (for messaging).
-function googleMobileStops(ordered, startLat, startLng){
-  const hasOrigin=(startLat!=null&&startLng!=null);
-  return Math.min(ordered.length, hasOrigin?4:5);
-}
 function buildMap(){
   if(mapBuilt) return;
   mapObj=L.map('map',{zoomControl:true,tap:true}).setView([41.85,-87.85],10);
@@ -1829,7 +1798,7 @@ function openForm(id){
     <div class="fld"><label>Doctor(s)</label><input id="f_drs" value="${esc(o.drs)}" placeholder="Dr. Jane Smith"></div>
     <div class="fld"><label>Office Hours</label><input id="f_hours" value="${esc(o.hours)}" placeholder="Mon–Fri 8–5"></div>
     <div class="fld"><label>Visit Day / Time</label><input id="f_visit" value="${esc(o.visitDay)}" placeholder="Tue 10am"></div>
-    <div class="fld"><label>Notes</label><textarea id="f_notes" placeholder="Add notes…">${esc(o.notes)}</textarea></div>
+    <div class="fld"><label>Notes</label><textarea id="f_notes" placeholder="Add notes…">${esc(o.notes)}</textarea><div class="dictate-hint">🎤 To talk instead of type, tap the field, then tap the microphone on your keyboard (next to the spacebar).</div></div>
     <div class="fld"><label>Visit history</label>
       <div class="visitbox">
         <div class="visitadd">
@@ -2068,8 +2037,7 @@ function openRoute(){
       <select id="rt_n"></select></div>
     <p style="color:var(--ink-faint);font-size:12px;line-height:1.45;margin:8px 0 16px;">Search an office to anchor the route there (stop #1) — it then fills in the nearest offices around it. Any Status/Rep filter still applies to the pool. Maps apps reliably handle ~9–10 stops; above that some may be dropped.</p>
     <div id="rt_list" style="margin-bottom:16px;"></div>
-    <button class="btn btn-primary" id="rt_apple" style="width:100%;margin-bottom:9px;">Open in Apple Maps</button>
-    <button class="btn" id="rt_google" style="width:100%;background:var(--teal-wash);color:var(--teal-deep);">Open in Google Maps</button>`;
+    <button class="btn btn-primary" id="rt_apple" style="width:100%;">Open in Apple Maps</button>`;
 
   const $=id=>document.getElementById(id);
 
@@ -2111,10 +2079,6 @@ function openRoute(){
       : (haveGPS?"Routing from your current location. Or search an office above to anchor the route there."
                 :"Tip: tap the locate button on the map to start from where you are, or search an office above to anchor the route.");
     $('rt_apple').onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u)window.open(u,'_blank'); };
-    $('rt_google').onclick=()=>{ const u=routeGoogleURL(ordered,sLat,sLng); if(!u)return;
-      const kept=googleMobileStops(ordered,sLat,sLng);
-      if(ordered.length>kept){ toast("Google Maps on mobile fits "+kept+" stops — opening those. Use Apple Maps for all "+ordered.length+"."); }
-      setTimeout(()=>window.open(u,'_blank'), ordered.length>kept?700:0); };
   }
   function showAnchorChip(){
     const a=anchorId?DB.find(o=>o.id===anchorId):null;
