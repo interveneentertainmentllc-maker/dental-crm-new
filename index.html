@@ -31,25 +31,38 @@
   --display:'Bricolage Grotesque',Georgia,serif;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
   --safe-top:env(safe-area-inset-top,0px);
-  --safe-bottom:env(safe-area-inset-bottom,0px);
+  /* In a mobile-Chrome TAB, safe-area insets report 0, so bottom controls would
+     collapse onto the screen edge — right under Chrome's bottom toolbar. Enforce a
+     minimum floor so the Route/radius/Add-Office controls always clear it. In
+     standalone (home-screen icon) the real inset is larger and wins via max(). */
+  --safe-bottom:max(env(safe-area-inset-bottom,0px), 24px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{margin:0;padding:0;height:100%;}
+html,body{margin:0;padding:0;height:100%;height:100dvh;}
 body{font-family:var(--sans);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;line-height:1.45;}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
 input,textarea,select{font-family:inherit;font-size:16px;}
 ::-webkit-scrollbar{width:0;height:0;}
-#app{display:flex;flex-direction:column;height:100%;max-width:560px;margin:0 auto;background:var(--paper);position:relative;}
+#app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:560px;margin:0 auto;background:var(--paper);position:relative;}
 
 header{padding:calc(var(--safe-top) + 14px) 16px 10px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
-header .ht{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+header .ht{display:flex;flex-direction:column;gap:10px;}
 header .ht>div:first-child{min-width:0;}
-.hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;}
-.hbtn{white-space:nowrap;flex:0 0 auto;}
+.hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;}
+.hbtn{white-space:nowrap;flex:1 1 0;justify-content:center;}
 @media (max-width:360px){
   .hbtns{gap:4px;}
   .hbtn{padding:8px 8px;font-size:11px;gap:4px;}
   header h1{font-size:18px;}
+  .iconrow{gap:5px;}
+  .ficon,.morebtn{padding:7px 10px;font-size:12px;gap:5px;}
+}
+@media (max-width:400px){
+  .route-btn{padding:9px 11px;font-size:12px;gap:5px;}
+  .nearby-toggle{padding:9px 11px;font-size:12px;gap:5px;}
+  .locate-btn{width:42px;height:42px;}
+  .rad-btn{width:30px;height:36px;font-size:18px;}
+  .rad-label{min-width:46px;font-size:11px;}
 }
 header h1{font-family:var(--display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;}
 header .sub{font-size:11px;color:#9fc7be;font-family:var(--mono);margin-top:2px;}
@@ -97,7 +110,7 @@ main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc
 .empty{text-align:center;padding:60px 30px;color:var(--ink-faint);}
 .empty h3{font-family:var(--display);color:var(--ink-soft);margin:0 0 6px;}
 
-.fab{position:fixed;bottom:calc(var(--safe-bottom) + 18px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:30;pointer-events:none;}
+.fab{position:fixed;bottom:calc(var(--safe-bottom) + 10px);left:50%;transform:translateX(-50%);max-width:560px;width:calc(100% - 32px);display:flex;gap:10px;z-index:650;pointer-events:none;}
 body.cal-view .fab{display:none;}
 .fab>*{pointer-events:auto;}
 .fab-add{flex:1;background:var(--teal);color:#fff;border-radius:14px;padding:15px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:var(--shadow-lg);}
@@ -205,8 +218,8 @@ body.cal-view .fab{display:none;}
 .fchip.on{background:var(--teal-deep);color:#fff;border-color:var(--teal-deep);}
 /* ---- grouped control card (priority filters) ---- */
 .ctrlwrap{padding:11px 14px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);}
-.iconrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
-.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
+.iconrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.ficon{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-soft);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s,border-color .12s;}
 .ficon svg{width:15px;height:15px;flex:0 0 auto;}
 .ficon .cv{font-size:9px;opacity:.6;transition:transform .15s;}
 .ficon.open .cv{transform:rotate(180deg);}
@@ -226,7 +239,7 @@ body.cal-view .fab{display:none;}
 .heat b{font-family:var(--mono);font-size:13px;font-weight:700;}
 .heat.on{background:var(--teal-deep);border-color:var(--teal-deep);}
 .heat.on b{color:#fff;}
-.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:8px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.morebtn{font-family:inherit;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-faint);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
 .morebtn .cv{font-size:9px;opacity:.6;transition:transform .15s;}
 .morebtn.open .cv{transform:rotate(180deg);}
 .morebtn:focus,.morebtn:focus-visible{outline:none;}
@@ -282,7 +295,8 @@ body.sheet-open #mapview{z-index:0;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
-.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 210px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 180px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+.prox-banner.expanded{max-height:calc(100% - 78px - 140px - var(--safe-bottom));}
 .prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;flex:0 0 auto;}
 .prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
@@ -294,6 +308,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .prox-banner .pb-more{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;margin-left:46px;color:var(--teal-deep);font-weight:700;font-size:13.5px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:7px 14px;line-height:1;white-space:nowrap;}
 .prox-banner .pb-more:active{background:var(--teal);color:#fff;}
 .prox-banner .pb-list{border-top:1px solid var(--line);flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.prox-banner.expanded .pb-list{min-height:200px;}
 .prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
 .prox-banner .pr-row:last-child{border-bottom:none;}
 .prox-banner .pr-row:active{background:var(--teal-wash);}
@@ -314,21 +329,21 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .popup-btn.ghost{background:var(--surface);border:1.5px solid var(--line-strong);color:var(--ink-soft);flex:1;}
 .popup-btn.add{flex:1;}
 .popup-meta{font-size:11px;color:var(--teal-deep);font-weight:600;margin-bottom:7px;font-family:var(--mono);}
-.locate-btn{position:absolute;bottom:calc(var(--safe-bottom) + 90px);right:14px;z-index:600;width:52px;height:52px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);}
+.locate-btn{position:absolute;bottom:calc(var(--safe-bottom) + 78px);left:50%;transform:translateX(-50%);z-index:600;width:46px;height:46px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-lg);}
 .locate-btn:active{background:var(--teal-deep);}
 .locate-btn.locating svg{animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .locate-btn.following{background:var(--teal-deep);box-shadow:0 0 0 0 rgba(35,191,205,.55),var(--shadow-lg);animation:followpulse 1.8s ease-out infinite;}
 @keyframes followpulse{0%{box-shadow:0 0 0 0 rgba(35,191,205,.5),var(--shadow-lg);}70%{box-shadow:0 0 0 14px rgba(35,191,205,0),var(--shadow-lg);}100%{box-shadow:0 0 0 0 rgba(35,191,205,0),var(--shadow-lg);}}
-.rad-ctrl{position:absolute;bottom:calc(var(--safe-bottom) + 152px);right:14px;z-index:600;display:none;align-items:center;gap:0;background:#fff;border-radius:24px;box-shadow:var(--shadow-lg);overflow:hidden;}
+.rad-ctrl{position:absolute;bottom:calc(var(--safe-bottom) + 80px);right:14px;z-index:600;display:none;align-items:center;gap:0;background:#fff;border-radius:22px;box-shadow:var(--shadow-lg);overflow:hidden;}
 .rad-ctrl.show{display:flex;}
-.rad-btn{width:40px;height:40px;font-size:22px;font-weight:700;color:var(--teal-deep);background:#fff;display:flex;align-items:center;justify-content:center;line-height:1;}
+.rad-btn{width:34px;height:38px;font-size:20px;font-weight:700;color:var(--teal-deep);background:#fff;display:flex;align-items:center;justify-content:center;line-height:1;}
 .rad-btn:active{background:var(--teal-wash);}
-.rad-label{min-width:62px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);border-left:1px solid var(--line);border-right:1px solid var(--line);padding:0 4px;}
+.rad-label{min-width:54px;text-align:center;font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--ink);border-left:1px solid var(--line);border-right:1px solid var(--line);padding:0 3px;}
 .userdot{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 4px rgba(26,115,232,.25),0 2px 6px rgba(0,0,0,.3);}
-.nearby-toggle{position:absolute;bottom:calc(var(--safe-bottom) + 90px);left:14px;z-index:600;background:var(--teal-deep);color:#fff;border-radius:24px;padding:11px 16px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:none;align-items:center;gap:7px;}
+.nearby-toggle{position:absolute;bottom:calc(var(--safe-bottom) + 80px);left:14px;z-index:600;background:var(--teal-deep);color:#fff;border-radius:22px;padding:10px 14px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:none;align-items:center;gap:6px;}
 .nearby-toggle.show{display:flex;}
-.route-btn{position:absolute;bottom:calc(var(--safe-bottom) + 100px);left:14px;z-index:600;background:var(--amber);color:#fff;border:none;border-radius:24px;padding:11px 16px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:7px;cursor:pointer;}
+.route-btn{position:absolute;bottom:calc(var(--safe-bottom) + 80px);left:14px;z-index:600;background:var(--amber);color:#fff;border:none;border-radius:22px;padding:10px 14px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:6px;cursor:pointer;}
 .pin{background:var(--teal);width:16px;height:16px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3);}
 .pin.visited{background:var(--green);}
 .pin.scanner{background:var(--amber);}
@@ -1312,7 +1327,7 @@ function refreshMap(filtered){
   // short backstops above, leaving Leaflet measured at the wrong size (tiles show
   // at the wrong zoom / off-center until a manual nudge). Add late backstops so
   // the map re-fits once the device catches up.
-  setTimeout(fixSize,700); setTimeout(fixSize,1200);
+  setTimeout(fixSize,700); setTimeout(fixSize,1200); setTimeout(fixSize,2000);
   let pts=filtered.filter(o=>o.lat&&o.lng);
 
   // ---- FOLLOW (driving) MODE -------------------------------------------------
@@ -1406,6 +1421,7 @@ function renderProxList(){
     b.onclick=(e)=>{ e.stopPropagation(); const id=b.getAttribute('data-proxid');
       _proxOpen=false; _proxFrozen=null; renderProxList(); openDetail(id); };
   });
+  list.scrollTop=0;   // always show the nearest (first) row at the top when opening
 }
 function updateProxBanner(tagged){
   const bn=document.getElementById('proxBanner'); if(!bn) return;
@@ -1444,6 +1460,7 @@ function updateProxBanner(tagged){
     `<div class="pb-list" id="proxList" style="display:none;"></div>`;
   bn._built=true;
   bn.classList.add('show');
+  bn.classList.toggle('expanded', _proxOpen);   // expanded list needs more height than the collapsed summary
   // Header click: tapping the NAME opens the nearest; tapping "+N more"/"less" toggles list.
   const head=document.getElementById('pbHead');
   if(head) head.onclick=(e)=>{
@@ -1470,7 +1487,12 @@ function drawUser(){
 }
 function locateMe(){
   // Tap the locate button toggles DRIVING/FOLLOW mode on and off.
-  if(followMode){ stopFollow(); toast("Stopped following"); return; }
+  // Edge case (iOS Chrome): auto-start may have set followMode=true but the
+  // automatic geolocation request was silently ignored, so no fix ever arrived
+  // (userPos is null). In that case a tap should RESTART follow via this real
+  // user gesture — not stop a mode that never actually engaged.
+  if(followMode && userPos){ stopFollow(); toast("Stopped following"); return; }
+  if(followMode && !userPos){ stopFollow(); }   // clear the half-started state, then start fresh below
   startFollow();
 }
 function startFollow(){
@@ -2518,6 +2540,14 @@ function startOnMapFollowing(){
     if(state.view!=="map") setView("map");
     // Give the map container a beat to lay out, then start following.
     setTimeout(()=>{ try{ if(!followMode) startFollow(); }catch(e){} }, 250);
+    // iOS Chrome often silently ignores a geolocation request that wasn't started
+    // by a user tap, so the auto-start can leave us "following" with no fix ever
+    // arriving (banner never appears, button stuck pulsing). If that happens,
+    // reset to a clean state after a few seconds so the user's first tap on the
+    // locate button cleanly starts follow via a real gesture (which Chrome honors).
+    setTimeout(()=>{
+      try{ if(followMode && !userPos){ stopFollow(); } }catch(e){}
+    }, 5200);
   }catch(e){}
 }
 
@@ -2527,6 +2557,21 @@ function startOnMapFollowing(){
 window.addEventListener('pageshow',(e)=>{
   if(state.view==="map" && !followMode){ startOnMapFollowing(); }
 });
+
+// Mobile Chrome (and Safari) show/hide their toolbars as you scroll, which changes
+// the VISIBLE viewport height. Leaflet measures its container once and won't notice,
+// so the map can end up sized to the wrong height — tiles overflow / controls overlap.
+// Re-fit the map (debounced) whenever the viewport changes or the device rotates.
+let _vpResizeT=null;
+function _refitMapSoon(){
+  if(_vpResizeT) clearTimeout(_vpResizeT);
+  _vpResizeT=setTimeout(()=>{
+    try{ if(mapObj && state.view==="map"){ mapObj.invalidateSize(false); } }catch(e){}
+  },180);
+}
+window.addEventListener('resize', _refitMapSoon);
+window.addEventListener('orientationchange', ()=>{ _refitMapSoon(); setTimeout(_refitMapSoon,500); });
+if(window.visualViewport){ window.visualViewport.addEventListener('resize', _refitMapSoon); }
 </script>
 </body>
 </html>
