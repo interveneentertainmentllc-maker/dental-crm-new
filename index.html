@@ -49,6 +49,19 @@ input,textarea,select{font-family:inherit;font-size:16px;}
 
 header{padding:calc(var(--safe-top) + 10px) 16px 8px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
 header .ht{display:flex;flex-direction:column;gap:7px;}
+.hdr-toggle{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:9px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;cursor:pointer;transition:transform .2s;}
+.hdr-toggle svg{transition:transform .2s;}
+/* Collapsed: hide everything in the top block except the title + toggle, and the
+   filter bar stays. Reclaims most of the top space so the map dominates. */
+body.hdr-collapsed header .sub,
+body.hdr-collapsed header #btnSync,
+body.hdr-collapsed header #meBadge,
+body.hdr-collapsed header .hbtns,
+body.hdr-collapsed header .searchbar,
+body.hdr-collapsed #statbar,
+body.hdr-collapsed #filterbar{display:none !important;}
+body.hdr-collapsed header{padding-bottom:6px;}
+body.hdr-collapsed .hdr-toggle svg{transform:rotate(180deg);}
 header .ht>div:first-child{min-width:0;}
 .hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;}
 .hbtn{white-space:nowrap;flex:1 1 0;justify-content:center;}
@@ -325,11 +338,11 @@ body.sheet-open #mapview{z-index:0;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);-webkit-touch-callout:none;}
 #map .leaflet-tile-container,#map .leaflet-tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
-#mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
-.prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 180px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
+#mapcount{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
+.prox-banner{position:absolute;top:8px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 8px - 180px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
 /* Expanded list is capped so the MAP stays clearly visible — at most ~45% of the
    map area, and never taller than it needs for its content. */
-.prox-banner.expanded{max-height:min(46%, calc(100% - 78px - 180px - var(--safe-bottom)));}
+.prox-banner.expanded{max-height:min(46%, calc(100% - 8px - 180px - var(--safe-bottom)));}
 .prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;flex:0 0 auto;}
 .prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
@@ -386,6 +399,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 <div id="app">
 <header>
   <div class="ht">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
     <div>
       <h1>Salesly</h1>
       <div class="sub" id="subline">loading…</div>
@@ -393,6 +407,10 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
         <span id="syncDot" class="syncdot"></span><span id="syncLabel">Team sync: off</span>
       </button>
       <button id="meBadge" class="synclink" aria-label="Who am I" style="display:none;margin-left:6px;">Set who you are</button>
+    </div>
+    <button id="hdrToggle" class="hdr-toggle" aria-label="Collapse or expand header">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
     </div>
     <div class="hbtns">
       <button class="hbtn" id="btnView" aria-label="Toggle map view">
@@ -1256,7 +1274,7 @@ function routeAppleURL(ordered, startLat, startLng){
 }
 function buildMap(){
   if(mapBuilt) return;
-  mapObj=L.map('map',{zoomControl:true,tap:true}).setView([41.85,-87.85],10);
+  mapObj=L.map('map',{zoomControl:false,tap:true}).setView([41.85,-87.85],10);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19, attribution:'© OpenStreetMap'
   }).addTo(mapObj);
@@ -2534,6 +2552,11 @@ function wire(){
   on('btnExport','click',openExport);
   on('btnSync','click',openSync);
   on('meBadge','click',openWhoAmI);
+  on('hdrToggle','click',()=>{
+    const collapsed=document.body.classList.toggle('hdr-collapsed');
+    try{ localStorage.setItem('hdr_collapsed', collapsed?'1':'0'); }catch(e){}
+    _refitMapSoon(); setTimeout(_refitMapSoon,260);
+  });
   on('btnView','click',()=>setView(state.view==="map"?"list":"map"));
   on('btnCal','click',()=>setView(state.view==="calendar"?"list":"calendar"));
   on('locateBtn','click',locateMe);
@@ -2588,6 +2611,8 @@ function wire(){
 }
 
 /* ---------- boot ---------- */
+// Header starts COLLAPSED so the map is prominent; remember the user's choice.
+try{ if(localStorage.getItem('hdr_collapsed')!=='0') document.body.classList.add('hdr-collapsed'); }catch(e){ document.body.classList.add('hdr-collapsed'); }
 // Expose popup-invoked handlers globally as a safety net.
 window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openForm;
 (async function init(){
