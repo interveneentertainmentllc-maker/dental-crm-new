@@ -325,7 +325,9 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map .leaflet-tile-container,#map .leaflet-tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
 #mapcount{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
 .prox-banner{position:absolute;top:78px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 78px - 180px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
-.prox-banner.expanded{max-height:calc(100% - 78px - 140px - var(--safe-bottom));}
+/* Expanded list is capped so the MAP stays clearly visible — at most ~45% of the
+   map area, and never taller than it needs for its content. */
+.prox-banner.expanded{max-height:min(46%, calc(100% - 78px - 180px - var(--safe-bottom)));}
 .prox-banner.show{display:flex;opacity:1;}
 .prox-banner .pb-head{display:flex;flex-direction:column;gap:9px;padding:13px 16px;cursor:pointer;flex:0 0 auto;}
 .prox-banner .pb-row{display:flex;align-items:center;gap:12px;}
@@ -337,7 +339,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 .prox-banner .pb-more{display:inline-flex;align-items:center;align-self:flex-start;gap:5px;margin-left:46px;color:var(--teal-deep);font-weight:700;font-size:13.5px;font-family:var(--sans);background:var(--teal-wash);border:1px solid var(--teal);border-radius:16px;padding:7px 14px;line-height:1;white-space:nowrap;}
 .prox-banner .pb-more:active{background:var(--teal);color:#fff;}
 .prox-banner .pb-list{border-top:1px solid var(--line);flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;border-bottom-left-radius:14px;border-bottom-right-radius:14px;}
-.prox-banner.expanded .pb-list{min-height:200px;}
+.prox-banner.expanded .pb-list{min-height:0;}
 .prox-banner .pr-row{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff;text-align:left;}
 .prox-banner .pr-row:last-child{border-bottom:none;}
 .prox-banner .pr-row:active{background:var(--teal-wash);}
