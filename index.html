@@ -2367,9 +2367,9 @@ function openSync(){
     </div>
     <div class="fld"><label>Apps Script Web App URL</label>
       <input id="sy_url" type="url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(GS_URL)}"></div>
-    ${(isAdmin()||!ME)?`<div class="fld"><label>Sync token (team password)</label>
+    ${`<div class="fld"><label>Sync token (team password)</label>
       <input id="sy_token" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="shared secret" value="${esc(GS_TOKEN)}">
-      <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;line-height:1.5;">Must match the <code>TOKEN</code> in your Apps Script. Change it here and in the script (then redeploy the script) to lock out anyone who had the old one.</div></div>`:``}
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:5px;line-height:1.5;">Must match the <code>TOKEN</code> in your Apps Script. Change it here and in the script (then redeploy the script) to lock out anyone who had the old one.</div></div>`}
     <div class="actions" style="margin-top:2px;">
       <button class="btn btn-ghost" id="sy_off">Turn off</button>
       <button class="btn btn-primary" id="sy_save">Save &amp; connect</button>
