@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Salesly">
 <meta name="theme-color" content="#0f3d36">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Salesly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2665,6 +2667,14 @@ function _refitMapSoon(){
 window.addEventListener('resize', _refitMapSoon);
 window.addEventListener('orientationchange', ()=>{ _refitMapSoon(); setTimeout(_refitMapSoon,500); });
 if(window.visualViewport){ window.visualViewport.addEventListener('resize', _refitMapSoon); }
+// ---- PWA: register the offline service worker ----
+// Defensive: if the browser lacks support, or sw.js is missing, or registration
+// fails, the app keeps working exactly as before — this only ADDS offline/caching.
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{ /* no-op: app works without it */ });
+  });
+}
 </script>
 </body>
 </html>
