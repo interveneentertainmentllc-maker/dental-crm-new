@@ -64,6 +64,32 @@ header .ht>div:first-child{min-width:0;}
   .rad-btn{width:30px;height:36px;font-size:18px;}
   .rad-label{min-width:46px;font-size:11px;}
 }
+/* SHORT screens (older iPhone SE / 8 / mini are ~667-750px tall). The top region
+   was eating too much height. Compact everything above the map so the map keeps
+   most of the screen. Targets height, which the width queries above didn't. */
+@media (max-height:750px){
+  header{padding:calc(var(--safe-top) + 8px) 14px 7px;}
+  header .ht{gap:6px;}
+  header h1{font-size:16px;}
+  header .sub{font-size:10px;margin-top:1px;}
+  .synclink{font-size:9.5px;padding:2px 7px;margin-top:3px;}
+  .hbtn{padding:6px 9px;font-size:11px;}
+  .hbtn svg{width:13px;height:13px;}
+  .searchbar{margin-top:7px;}
+  .searchbar input{padding:9px 12px 9px 36px;font-size:15px;}
+  .statbar .stat{padding:6px 4px;}
+  .stat .sv{font-size:15px;}
+  .stat .sl{font-size:9px;}
+  .filterbar{padding:7px 14px;}
+}
+/* Very short screens get an even tighter pass. */
+@media (max-height:670px){
+  header{padding:calc(var(--safe-top) + 6px) 14px 6px;}
+  header h1{font-size:15px;}
+  .hbtn{padding:5px 8px;font-size:10.5px;}
+  .stat .sv{font-size:14px;}
+  .filterbar{padding:6px 12px;}
+}
 header h1{font-family:var(--display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em;}
 header .sub{font-size:11px;color:#9fc7be;font-family:var(--mono);margin-top:2px;}
 .synclink{display:inline-flex;align-items:center;gap:5px;margin-top:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#cfe7e1;font-size:10.5px;font-family:var(--mono);padding:3px 8px;border-radius:20px;cursor:pointer;}
