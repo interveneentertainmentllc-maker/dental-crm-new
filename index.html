@@ -45,8 +45,8 @@ input,textarea,select{font-family:inherit;font-size:16px;}
 ::-webkit-scrollbar{width:0;height:0;}
 #app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:560px;margin:0 auto;background:var(--paper);position:relative;}
 
-header{padding:calc(var(--safe-top) + 14px) 16px 10px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
-header .ht{display:flex;flex-direction:column;gap:10px;}
+header{padding:calc(var(--safe-top) + 10px) 16px 8px;background:var(--teal-deep);color:#fff;position:sticky;top:0;z-index:20;}
+header .ht{display:flex;flex-direction:column;gap:7px;}
 header .ht>div:first-child{min-width:0;}
 .hbtns{display:flex;gap:6px;flex:0 0 auto;flex-wrap:nowrap;justify-content:flex-start;}
 .hbtn{white-space:nowrap;flex:1 1 0;justify-content:center;}
@@ -67,7 +67,7 @@ header .ht>div:first-child{min-width:0;}
 /* SHORT screens (older iPhone SE / 8 / mini are ~667-750px tall). The top region
    was eating too much height. Compact everything above the map so the map keeps
    most of the screen. Targets height, which the width queries above didn't. */
-@media (max-height:750px){
+@media (max-height:850px){
   header{padding:calc(var(--safe-top) + 8px) 14px 7px;}
   header .ht{gap:6px;}
   header h1{font-size:16px;}
