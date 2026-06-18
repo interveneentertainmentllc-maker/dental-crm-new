@@ -481,7 +481,6 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 </div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
-  <button id="clearRoute" style="display:none;position:absolute;bottom:calc(var(--safe-bottom) + 132px);left:50%;transform:translateX(-50%);z-index:560;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:18px;padding:6px 14px;font-size:12.5px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;">✕ Clear route</button>
   <div class="prox-banner" id="proxBanner"></div>
   <div class="rad-ctrl" id="radCtrl">
     <button class="rad-btn" id="radMinus" aria-label="Smaller radius">−</button>
@@ -1506,38 +1505,14 @@ function makeMarker(o){
   m._oid=o.id;
   return m;
 }
-// Draw the planned route on Salesly's own map: numbered pins (1..N) in route
-// order, connected by a line — mirroring the stop list in the route panel. Each
-// pin is tappable to open that office and log a visit. Navigation itself is done
-// in Apple Maps; this is the in-app plan so the rep can work without app-switching.
+// On-map route overlay removed by request: the planned route is shown in the
+// route panel list and handed to Apple Maps for navigation. These remain as
+// safe no-ops so existing call sites don't error.
 function clearRouteOverlay(){
   if(routeLayer){ try{ mapObj.removeLayer(routeLayer); }catch(e){} routeLayer=null; }
   const cb=document.getElementById('clearRoute'); if(cb) cb.style.display='none';
 }
-function drawRouteOverlay(ordered){
-  if(!mapObj) return;
-  clearRouteOverlay();
-  const pts=(ordered||[]).filter(o=>o&&o.lat&&o.lng);
-  if(!pts.length) return;
-  routeLayer=L.layerGroup();
-  // connecting line in route order — drawn as a "casing" (dark wide line under a
-  // brighter line on top, solid, rounded joints) to read like a real map route.
-  const line=pts.map(o=>[+o.lat,+o.lng]);
-  L.polyline(line,{color:'#0e6a73',weight:9,opacity:.55,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // casing
-  L.polyline(line,{color:'#23bfcd',weight:5,opacity:.95,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // main
-  // numbered markers
-  pts.forEach((o,i)=>{
-    const icon=L.divIcon({className:'',html:`<div class="routepin">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-14]});
-    const m=L.marker([+o.lat,+o.lng],{icon,zIndexOffset:1000});
-    m.bindPopup(()=>popupHTML(o),{minWidth:230,maxWidth:260});
-    m._oid=o.id;
-    m.addTo(routeLayer);
-  });
-  routeLayer.addTo(mapObj);
-  const cb=document.getElementById('clearRoute'); if(cb) cb.style.display='block';
-  // fit the map to show the whole route
-  try{ mapObj.fitBounds(L.latLngBounds(line),{padding:[60,60],maxZoom:15}); }catch(e){}
-}
+function drawRouteOverlay(){ /* overlay intentionally not drawn */ }
 // Inline onclick inside a Leaflet popup is unreliable, so bind real listeners on popupopen.
 function wirePopup(e){
   const el = (e.popup && e.popup.getElement) ? e.popup.getElement() : null;
@@ -2348,9 +2323,9 @@ function openRoute(){
   function renderRoute(){
     rebuildStopOptions(currentPool().length);
     const ordered=computeOrdered();
-    drawRouteOverlay(ordered);
     const sLat=(!anchorId&&haveGPS)?userPos.lat:null;
     const sLng=(!anchorId&&haveGPS)?userPos.lng:null;
+    drawRouteOverlay(ordered, sLat, sLng);
     $('rt_list').innerHTML=ordered.length?ordered.map((o,i)=>`<div style="display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);">
       <span style="font-family:var(--mono);font-weight:700;color:var(--amber);min-width:20px;">${i+1}</span>
       <span style="font-size:13.5px;"><b>${esc(o.name||'(no name)')}</b> <span style="color:var(--ink-soft)">— ${esc(o.city||'')}</span></span></div>`).join('')
@@ -2719,7 +2694,6 @@ function wire(){
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
   on('routeBtn','click',openRoute);
-  on('clearRoute','click',clearRouteOverlay);
   on('radMinus','click',()=>changeRadius(-1));
   on('radPlus','click',()=>changeRadius(1));
   on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
