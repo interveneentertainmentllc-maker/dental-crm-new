@@ -339,6 +339,10 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);-webkit-touch-callout:none;}
 #map .leaflet-tile-container,#map .leaflet-tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
 #mapcount{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
+#dropConfirm{position:fixed;left:14px;right:14px;bottom:calc(var(--safe-bottom) + 78px);z-index:660;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lg);padding:10px 12px;}
+#dropConfirm .dc-msg{flex:1;font-size:12.5px;color:var(--ink-soft);line-height:1.35;}
+#dropConfirm .dc-cancel{background:none;border:none;color:var(--ink-faint);font-size:13px;font-weight:600;padding:8px 10px;cursor:pointer;}
+#dropConfirm .dc-ok{background:var(--teal);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;white-space:nowrap;}
 .prox-banner{position:absolute;top:8px;left:14px;right:14px;z-index:500;margin:0 auto;max-width:360px;max-height:calc(100% - 8px - 180px - var(--safe-bottom));background:#fff;color:var(--ink);border-radius:14px;box-shadow:var(--shadow-lg);display:none;flex-direction:column;opacity:0;transition:opacity .2s;overflow:hidden;}
 /* Expanded list is capped so the MAP stays clearly visible — at most ~45% of the
    map area, and never taller than it needs for its content. */
@@ -585,7 +589,13 @@ function storeToRows(){
   // edited seed offices
   Object.keys(store.over||{}).forEach(idx=>{
     const o=store.over[idx]||{}; const id="s"+idx;
-    rows.push({id,name:o.name||"",addr:o.addr||"",city:o.city||"",zip:o.zip||"",lat:o.lat||"",lng:o.lng||"",
+    // Safety net: if an override is missing identity fields (e.g. a partial write),
+    // fall back to the live DB office or the raw SEED row so we NEVER write a blank
+    // name/address/coords to the Sheet and erase the office on other devices.
+    const live=(typeof DB!=="undefined"&&DB.length)?DB.find(x=>x.id===id):null;
+    const seed=(typeof SEED!=="undefined"&&SEED[idx])?SEED[idx]:null;
+    const F=(k,si)=>{ if(o[k]!=null&&o[k]!=="")return o[k]; if(live&&live[k]!=null&&live[k]!=="")return live[k]; if(seed&&seed[si]!=null&&seed[si]!=="")return seed[si]; return ""; };
+    rows.push({id,name:F("name",0),addr:F("addr",1),city:F("city",2),zip:F("zip",3),lat:F("lat",4),lng:F("lng",5),
       phone:o.phone||"",email:o.email||"",scanner:o.scanner||"",lab:o.lab||"",drs:o.drs||"",hours:o.hours||"",
       visitDay:o.visitDay||"",visited:visitedCell(o),notes:o.notes||"",visits:visitsToString(parseVisits(o.visits))});
   });
@@ -1190,14 +1200,30 @@ function renderInner(){
     } else { drawer.style.display="none"; drawer.innerHTML=""; drawer._sig=null; }
   }
   const filtered=DB.filter(matchFilter);
-  // stats
-  const tot=DB.length, vis=DB.filter(isVisited).length, sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
+  // stats — when a rep is selected (repFilter), show THAT rep's numbers; else team totals.
+  const rf0=String(state.repFilter||"").replace(/\s+/g," ").toLowerCase().trim();
+  const visitedByRep=(o)=>!!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rf0));
+  const addedByRep=(o)=>String(o.addedBy||"").replace(/\s+/g," ").toLowerCase().trim()===rf0;
+  let tot,vis,sc,added,repName="";
+  if(rf0){
+    repName=(REPS||[]).map(r=>r.name).find(n=>String(n).replace(/\s+/g," ").toLowerCase().trim()===rf0)||state.repFilter;
+    const theirVisited=DB.filter(visitedByRep);
+    tot=DB.length;
+    vis=theirVisited.length;
+    sc=theirVisited.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
+    added=DB.filter(addedByRep).length;
+  } else {
+    tot=DB.length;
+    vis=DB.filter(isVisited).length;
+    sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
+    added=store.add.length;
+  }
   document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
-     <div class="stat v"><div class="sv">${vis}</div><div class="sl">Visited</div></div>
+     <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
      <div class="stat s"><div class="sv">${sc}</div><div class="sl">Scanners</div></div>
-     <div class="stat"><div class="sv">${store.add.length}</div><div class="sl">Added</div></div>`;
+     <div class="stat"><div class="sv">${added}</div><div class="sl">Added</div></div>`;
 
   const main=document.getElementById('main');
   if(state.view==="map"){ refreshMap(filtered); }
@@ -1357,19 +1383,48 @@ async function reverseGeocode(lat, lng){
 }
 let _dropMarker=null;
 function dropPinAt(latlng){
-  const lat=+latlng.lat.toFixed(6), lng=+latlng.lng.toFixed(6);
-  // visual pin so the rep sees exactly where they dropped
+  let lat=+latlng.lat.toFixed(6), lng=+latlng.lng.toFixed(6);
+  // Drop a DRAGGABLE pin so the rep can nudge it exactly onto the building before
+  // confirming. We don't geocode or open the form until they tap "Use this spot".
   try{ if(_dropMarker) mapObj.removeLayer(_dropMarker); }catch(e){}
-  try{ _dropMarker=L.marker([lat,lng]).addTo(mapObj); }catch(e){}
+  try{
+    _dropMarker=L.marker([lat,lng],{draggable:true,autoPan:true}).addTo(mapObj);
+    _dropMarker.on('dragend',()=>{ const p=_dropMarker.getLatLng(); lat=+p.lat.toFixed(6); lng=+p.lng.toFixed(6); });
+  }catch(e){}
   if(navigator.vibrate){ try{navigator.vibrate(15);}catch(e){} }
-  toast("📍 Pin dropped — looking up address…");
-  reverseGeocode(lat,lng).then(info=>{
-    openForm(null, {lat:lat, lng:lng, addr:info.addr||"", city:info.city||"", zip:info.zip||""});
-    if(info.addr||info.city){ toast("Address found — check & name the office"); }
-    else { toast("Couldn't find an address — pin saved, type the rest"); }
-    try{ if(_dropMarker){ mapObj.removeLayer(_dropMarker); _dropMarker=null; } }catch(e){}
-  });
+  // Confirmation bar: drag to fine-tune, then confirm or cancel.
+  showDropConfirm(
+    ()=>{   // CONFIRM
+      const p=_dropMarker?_dropMarker.getLatLng():{lat,lng};
+      const flat=+p.lat.toFixed(6), flng=+p.lng.toFixed(6);
+      toast("📍 Looking up address…");
+      reverseGeocode(flat,flng).then(info=>{
+        openForm(null, {lat:flat, lng:flng, addr:info.addr||"", city:info.city||"", zip:info.zip||""});
+        if(info.addr||info.city){ toast("Address found — check & name the office"); }
+        else { toast("Couldn't find an address — pin saved, type the rest"); }
+        try{ if(_dropMarker){ mapObj.removeLayer(_dropMarker); _dropMarker=null; } }catch(e){}
+      });
+    },
+    ()=>{   // CANCEL
+      try{ if(_dropMarker){ mapObj.removeLayer(_dropMarker); _dropMarker=null; } }catch(e){}
+    }
+  );
 }
+// Small bottom bar shown while a drop-pin is being placed. Drag the pin to adjust.
+let _dropConfirmEl=null;
+function showDropConfirm(onConfirm, onCancel){
+  hideDropConfirm();
+  const bar=document.createElement('div');
+  bar.id='dropConfirm';
+  bar.innerHTML=`<span class="dc-msg">Drag the pin onto the exact spot</span>
+    <button class="dc-cancel" type="button">Cancel</button>
+    <button class="dc-ok" type="button">Use this spot</button>`;
+  document.body.appendChild(bar);
+  _dropConfirmEl=bar;
+  bar.querySelector('.dc-ok').onclick=()=>{ hideDropConfirm(); onConfirm&&onConfirm(); };
+  bar.querySelector('.dc-cancel').onclick=()=>{ hideDropConfirm(); onCancel&&onCancel(); };
+}
+function hideDropConfirm(){ if(_dropConfirmEl){ try{_dropConfirmEl.remove();}catch(e){} _dropConfirmEl=null; } }
 function popupHTML(o){
   const scOn=o.scanner&&o.scanner!=="None"&&o.scanner!=="";
   let dist="";
@@ -2095,7 +2150,13 @@ function quickNote(id){
   const newVisits=ensureVisitToday(o.visits, lastColor(o));
   if(id[0]==="s"){
     const idx=parseInt(id.slice(1),10);
-    store.over[idx]=Object.assign({},store.over[idx],{notes:newNotes,visited:true,visits:newVisits});
+    // IMPORTANT: base the override on the office's CURRENT full fields. If this is
+    // the first edit to this seed office, store.over[idx] is empty — writing only
+    // {notes,visited,visits} would later serialize a BLANK name to the Sheet and
+    // erase the office name on sync. Seeding from `o` keeps name/addr/city/coords.
+    const base=store.over[idx]||{name:o.name,addr:o.addr,city:o.city,zip:o.zip,lat:o.lat,lng:o.lng,
+      phone:o.phone,email:o.email,scanner:o.scanner,lab:o.lab,drs:o.drs,hours:o.hours,visitDay:o.visitDay,addedBy:o.addedBy};
+    store.over[idx]=Object.assign({},base,{notes:newNotes,visited:true,visits:newVisits});
   } else {
     const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; a.visits=newVisits; }
   }
