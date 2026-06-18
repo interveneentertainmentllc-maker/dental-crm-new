@@ -339,6 +339,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 #map{flex:1;width:100%;height:100%;background:var(--surface-2);-webkit-touch-callout:none;}
 #map .leaflet-tile-container,#map .leaflet-tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
 #mapcount{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
+.routepin{width:26px;height:26px;border-radius:50%;background:var(--amber);color:#fff;font-family:var(--mono);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(22,33,29,.35);}
 #dropConfirm{position:fixed;left:14px;right:14px;bottom:calc(var(--safe-bottom) + 78px);z-index:660;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow-lg);padding:10px 12px;}
 #dropConfirm .dc-msg{flex:1;font-size:12.5px;color:var(--ink-soft);line-height:1.35;}
 #dropConfirm .dc-cancel{background:none;border:none;color:var(--ink-faint);font-size:13px;font-weight:600;padding:8px 10px;cursor:pointer;}
@@ -480,6 +481,7 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 </div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
+  <button id="clearRoute" style="display:none;position:absolute;bottom:calc(var(--safe-bottom) + 132px);left:50%;transform:translateX(-50%);z-index:560;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:18px;padding:6px 14px;font-size:12.5px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;">✕ Clear route</button>
   <div class="prox-banner" id="proxBanner"></div>
   <div class="rad-ctrl" id="radCtrl">
     <button class="rad-btn" id="radMinus" aria-label="Smaller radius">−</button>
@@ -841,7 +843,7 @@ let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list
   gHeat:[],         // subset of ["green","yellow","red"] — OR within the group
   openGroups:[],    // which icon panels are expanded: subset of ["visit","status","heat"]
   showMore:false};  // secondary-filter drawer open?
-let mapObj=null, clusterLayer=null, mapBuilt=false;
+let mapObj=null, clusterLayer=null, mapBuilt=false, routeLayer=null;
 let userPos=null, userMarker=null, nearbyMode=false;
 const NEARBY_N=25;
 // ---- driving / follow mode ----
@@ -1503,6 +1505,36 @@ function makeMarker(o){
   m.bindPopup(()=>popupHTML(o),{minWidth:230,maxWidth:260});
   m._oid=o.id;
   return m;
+}
+// Draw the planned route on Salesly's own map: numbered pins (1..N) in route
+// order, connected by a line — mirroring the stop list in the route panel. Each
+// pin is tappable to open that office and log a visit. Navigation itself is done
+// in Apple Maps; this is the in-app plan so the rep can work without app-switching.
+function clearRouteOverlay(){
+  if(routeLayer){ try{ mapObj.removeLayer(routeLayer); }catch(e){} routeLayer=null; }
+  const cb=document.getElementById('clearRoute'); if(cb) cb.style.display='none';
+}
+function drawRouteOverlay(ordered){
+  if(!mapObj) return;
+  clearRouteOverlay();
+  const pts=(ordered||[]).filter(o=>o&&o.lat&&o.lng);
+  if(!pts.length) return;
+  routeLayer=L.layerGroup();
+  // connecting line in route order
+  const line=pts.map(o=>[+o.lat,+o.lng]);
+  L.polyline(line,{color:'#bf6b16',weight:4,opacity:.75,dashArray:'1,8',lineCap:'round'}).addTo(routeLayer);
+  // numbered markers
+  pts.forEach((o,i)=>{
+    const icon=L.divIcon({className:'',html:`<div class="routepin">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-14]});
+    const m=L.marker([+o.lat,+o.lng],{icon,zIndexOffset:1000});
+    m.bindPopup(()=>popupHTML(o),{minWidth:230,maxWidth:260});
+    m._oid=o.id;
+    m.addTo(routeLayer);
+  });
+  routeLayer.addTo(mapObj);
+  const cb=document.getElementById('clearRoute'); if(cb) cb.style.display='block';
+  // fit the map to show the whole route
+  try{ mapObj.fitBounds(L.latLngBounds(line),{padding:[60,60],maxZoom:15}); }catch(e){}
 }
 // Inline onclick inside a Leaflet popup is unreliable, so bind real listeners on popupopen.
 function wirePopup(e){
@@ -2314,6 +2346,7 @@ function openRoute(){
   function renderRoute(){
     rebuildStopOptions(currentPool().length);
     const ordered=computeOrdered();
+    drawRouteOverlay(ordered);
     const sLat=(!anchorId&&haveGPS)?userPos.lat:null;
     const sLng=(!anchorId&&haveGPS)?userPos.lng:null;
     $('rt_list').innerHTML=ordered.length?ordered.map((o,i)=>`<div style="display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);">
@@ -2684,6 +2717,7 @@ function wire(){
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
   on('routeBtn','click',openRoute);
+  on('clearRoute','click',clearRouteOverlay);
   on('radMinus','click',()=>changeRadius(-1));
   on('radPlus','click',()=>changeRadius(1));
   on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
