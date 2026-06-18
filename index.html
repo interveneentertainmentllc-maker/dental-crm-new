@@ -1282,10 +1282,18 @@ function routeOrder(offices, startLat, startLng){
   const pts=offices.filter(o=>o.lat&&o.lng).map(o=>({o,lat:+o.lat,lng:+o.lng}));
   const out=[]; let cLat=startLat, cLng=startLng;
   const pool=pts.slice();
+  // Track placed coordinates so we don't plot the SAME spot twice. Two distinct
+  // practices are essentially never at the identical lat/lng, so collapsing
+  // near-identical points (~within 50ft) removes true duplicates only. This
+  // affects the ROUTE only — it never edits or deletes stored office data.
+  const placed=[];
+  const isDup=(la,ln)=>placed.some(p=>haversine(p.lat,p.lng,la,ln)<50);
   while(pool.length){
     let bi=0, bd=Infinity;
     for(let i=0;i<pool.length;i++){ const d=haversine(cLat,cLng,pool[i].lat,pool[i].lng); if(d<bd){bd=d;bi=i;} }
     const next=pool.splice(bi,1)[0];
+    if(isDup(next.lat,next.lng)){ continue; }   // skip a stop at an already-placed spot
+    placed.push({lat:next.lat,lng:next.lng});
     out.push(next.o); cLat=next.lat; cLng=next.lng;
   }
   return out;
@@ -2263,7 +2271,7 @@ function openRoute(){
       ? "Routing from your chosen office through the nearest offices around it."
       : (haveGPS?"Routing from your current location. Or search an office above to anchor the route there."
                 :"Tip: tap the locate button on the map to start from where you are, or search an office above to anchor the route.");
-    $('rt_apple').onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u)window.open(u,'_blank'); };
+    $('rt_apple').onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u){ try{ location.href=u; }catch(e){ window.open(u,'_blank'); } } };
   }
   function showAnchorChip(){
     const a=anchorId?DB.find(o=>o.id===anchorId):null;
