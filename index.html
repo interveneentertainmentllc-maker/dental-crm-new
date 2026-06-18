@@ -1278,8 +1278,53 @@ function haversine(lat1,lng1,lat2,lng2){
 }
 // Order offices nearest-next ("greedy") starting from a given point.
 // Not a perfect shortest-path, but a sensible drive order that cuts backtracking.
+// Pick the N offices geographically CLOSEST to a point (start/anchor), dropping
+// junk coords and same-spot duplicates. Selection only — ordering is done by
+// routeOptimize so we avoid the greedy zig-zag.
+function selectNearest(offices, lat, lng, n){
+  const valid=o=>o.lat&&o.lng&&Math.abs(+o.lat)>0.01&&Math.abs(+o.lng)>0.01&&Math.abs(+o.lat)<=90&&Math.abs(+o.lng)<=180;
+  const scored=offices.filter(valid).map(o=>({o,lat:+o.lat,lng:+o.lng,d:haversine(lat,lng,+o.lat,+o.lng)}))
+                       .sort((a,b)=>a.d-b.d);
+  const out=[]; const placed=[];
+  for(const s of scored){
+    if(placed.some(p=>feetBetween(p.lat,p.lng,s.lat,s.lng)<60)) continue;
+    placed.push(s); out.push(s.o);
+    if(out.length>=n) break;
+  }
+  return out;
+}
+function _pathLen(seq, startLat, startLng){
+  let d=0, pLat=startLat, pLng=startLng;
+  for(const o of seq){ if(pLat!=null) d+=haversine(pLat,pLng,+o.lat,+o.lng); pLat=+o.lat; pLng=+o.lng; }
+  return d;
+}
+// Order stops efficiently: nearest-neighbor seed, then 2-opt (reverse any segment
+// whose reversal shortens the path) to remove crossings/zig-zag. `fixedStart`
+// (anchor) stays first.
+function routeOptimize(stops, startLat, startLng, fixedStart){
+  const nn=[]; let cLat=startLat, cLng=startLng; const pool=stops.slice();
+  while(pool.length){
+    let bi=0,bd=Infinity;
+    for(let i=0;i<pool.length;i++){ const d=haversine(cLat,cLng,+pool[i].lat,+pool[i].lng); if(d<bd){bd=d;bi=i;} }
+    const nx=pool.splice(bi,1)[0]; nn.push(nx); cLat=+nx.lat; cLng=+nx.lng;
+  }
+  let seq=nn, improved=true, guard=0;
+  while(improved && guard++<60){
+    improved=false;
+    for(let i=0;i<seq.length-1;i++){
+      for(let k=i+1;k<seq.length;k++){
+        const cand=seq.slice(0,i).concat(seq.slice(i,k+1).reverse(), seq.slice(k+1));
+        if(_pathLen(cand,startLat,startLng)+1e-9 < _pathLen(seq,startLat,startLng)){ seq=cand; improved=true; }
+      }
+    }
+  }
+  return fixedStart ? [fixedStart].concat(seq) : seq;
+}
 function routeOrder(offices, startLat, startLng){
-  const pts=offices.filter(o=>o.lat&&o.lng).map(o=>({o,lat:+o.lat,lng:+o.lng}));
+  // Exclude junk coordinates (0,0 or out-of-range) that would otherwise pull the
+  // nearest-next walk to the wrong place.
+  const valid=o=>o.lat&&o.lng&&Math.abs(+o.lat)>0.01&&Math.abs(+o.lng)>0.01&&Math.abs(+o.lat)<=90&&Math.abs(+o.lng)<=180;
+  const pts=offices.filter(valid).map(o=>({o,lat:+o.lat,lng:+o.lng}));
   const out=[]; let cLat=startLat, cLng=startLng;
   const pool=pts.slice();
   // Track placed coordinates so we don't plot the SAME spot twice. Two distinct
@@ -1287,7 +1332,7 @@ function routeOrder(offices, startLat, startLng){
   // near-identical points (~within 50ft) removes true duplicates only. This
   // affects the ROUTE only — it never edits or deletes stored office data.
   const placed=[];
-  const isDup=(la,ln)=>placed.some(p=>haversine(p.lat,p.lng,la,ln)<50);
+  const isDup=(la,ln)=>placed.some(p=>feetBetween(p.lat,p.lng,la,ln)<60);
   while(pool.length){
     let bi=0, bd=Infinity;
     for(let i=0;i<pool.length;i++){ const d=haversine(cLat,cLng,pool[i].lat,pool[i].lng); if(d<bd){bd=d;bi=i;} }
@@ -2252,11 +2297,19 @@ function openRoute(){
       const anchor=DB.find(o=>o.id===anchorId);
       if(!anchor||!anchor.lat||!anchor.lng) return [];
       const rest=pool.filter(o=>o.id!==anchorId);
-      return [anchor].concat(routeOrder(rest, +anchor.lat, +anchor.lng)).slice(0,stopN);
+      // Pick the (stopN-1) offices CLOSEST TO THE ANCHOR, then order them
+      // efficiently starting from the anchor.
+      const near=selectNearest(rest, +anchor.lat, +anchor.lng, Math.max(stopN-1,0));
+      return routeOptimize(near, +anchor.lat, +anchor.lng, anchor);
     }
-    if(haveGPS) return routeOrder(pool, userPos.lat, userPos.lng).slice(0,stopN);
+    if(haveGPS){
+      // Pick the stopN offices CLOSEST TO THE REP, then order them efficiently.
+      const near=selectNearest(pool, userPos.lat, userPos.lng, stopN);
+      return routeOptimize(near, userPos.lat, userPos.lng, null);
+    }
     if(!pool.length) return [];
-    return routeOrder(pool, +pool[0].lat, +pool[0].lng).slice(0,stopN);
+    const near=selectNearest(pool, +pool[0].lat, +pool[0].lng, stopN);
+    return routeOptimize(near, +pool[0].lat, +pool[0].lng, null);
   }
   function renderRoute(){
     rebuildStopOptions(currentPool().length);
