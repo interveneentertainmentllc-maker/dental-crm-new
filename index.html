@@ -1520,9 +1520,11 @@ function drawRouteOverlay(ordered){
   const pts=(ordered||[]).filter(o=>o&&o.lat&&o.lng);
   if(!pts.length) return;
   routeLayer=L.layerGroup();
-  // connecting line in route order
+  // connecting line in route order — drawn as a "casing" (dark wide line under a
+  // brighter line on top, solid, rounded joints) to read like a real map route.
   const line=pts.map(o=>[+o.lat,+o.lng]);
-  L.polyline(line,{color:'#bf6b16',weight:4,opacity:.75,dashArray:'1,8',lineCap:'round'}).addTo(routeLayer);
+  L.polyline(line,{color:'#0e6a73',weight:9,opacity:.55,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // casing
+  L.polyline(line,{color:'#23bfcd',weight:5,opacity:.95,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // main
   // numbered markers
   pts.forEach((o,i)=>{
     const icon=L.divIcon({className:'',html:`<div class="routepin">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-14]});
