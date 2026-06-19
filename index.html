@@ -481,20 +481,6 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 </div>
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
-  <button id="clearRoute" style="display:none;position:absolute;bottom:calc(var(--safe-bottom) + 132px);left:50%;transform:translateX(-50%);z-index:560;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:18px;padding:6px 14px;font-size:12.5px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;">✕ Clear route</button>
-  <div id="routeBar" style="display:none;position:absolute;top:8px;left:14px;right:14px;max-width:360px;margin:0 auto;z-index:555;background:var(--teal-deep);color:#fff;border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden;flex-direction:column;">
-    <div id="rb_head" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.8;font-weight:600;">Next stop <span id="rb_caret">▾</span></div>
-        <div id="rb_next" style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
-      </div>
-      <div id="rb_count" style="font-size:12px;font-family:var(--mono);opacity:.9;white-space:nowrap;">0 left</div>
-      <button id="rb_end" style="background:rgba(255,255,255,.16);border:none;color:#fff;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:600;cursor:pointer;">End</button>
-    </div>
-    <div id="rb_list" style="display:none;max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch;background:rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.15);"></div>
-  </div>
-  <div class="prox-banner" id="proxBanner"></div>;border:none;color:#fff;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:600;cursor:pointer;">End</button>
-  </div>
   <div class="prox-banner" id="proxBanner"></div>
   <div class="rad-ctrl" id="radCtrl">
     <button class="rad-btn" id="radMinus" aria-label="Smaller radius">−</button>
@@ -577,11 +563,8 @@ const GS_CFG_KEY="ildental_gs";
 // The admin can change this in the Team Sync dialog; it's stored per device. The
 // value here is only the default for setups saved before the field existed.
 let GS_TOKEN="Nh08rwbEMdxBvJDy-D_LAMo1";
-// OpenRouteService key — powers the road-following route line. Stored per device,
-// editable in Team Sync. Free tier; if it fails the route falls back to a straight line.
-let ORS_KEY="eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImE4MGQzNTA4ZjgyYzQwZjA5MGNmNzQ3MDZjMjEzZGQxIiwiaCI6Im11cm11cjY0In0=";
 let GS_URL="";
-try{const c=JSON.parse(localStorage.getItem(GS_CFG_KEY)||"{}");GS_URL=c.url||"";if(c.token)GS_TOKEN=c.token;if(c.orsKey)ORS_KEY=c.orsKey;}catch(e){}
+try{const c=JSON.parse(localStorage.getItem(GS_CFG_KEY)||"{}");GS_URL=c.url||"";if(c.token)GS_TOKEN=c.token;}catch(e){}
 let cloudOn=false, lastSyncJSON="", lastSheetJS="", pollTimer=null, pulling=false, pushing=false, lastRawRows=0, lastSyncAt=0, watchdog=null;
 const POLL_MS=15000;
 
@@ -860,8 +843,6 @@ let SEED=[], DB=[], state={tab:"city",filter:"all",q:"",openCity:null,view:"list
   openGroups:[],    // which icon panels are expanded: subset of ["visit","status","heat"]
   showMore:false};  // secondary-filter drawer open?
 let mapObj=null, clusterLayer=null, mapBuilt=false, routeLayer=null;
-// Live route progress: ordered stop ids, which have been logged, and whether active.
-let activeRoute=null;  // {stops:[id...], done:Set, active:true}
 let userPos=null, userMarker=null, nearbyMode=false;
 const NEARBY_N=25;
 // ---- driving / follow mode ----
@@ -1531,159 +1512,7 @@ function clearRouteOverlay(){
   if(routeLayer){ try{ mapObj.removeLayer(routeLayer); }catch(e){} routeLayer=null; }
   const cb=document.getElementById('clearRoute'); if(cb) cb.style.display='none';
 }
-// ---- LIVE ROUTE PROGRESS ----
-const ROUTE_KEY="ildental_route";
-function saveRoute(){
-  try{
-    if(activeRoute&&activeRoute.active) localStorage.setItem(ROUTE_KEY,JSON.stringify(activeRoute));
-    else localStorage.removeItem(ROUTE_KEY);
-  }catch(e){}
-}
-function loadRoute(){
-  try{
-    const r=localStorage.getItem(ROUTE_KEY);
-    if(r){ const a=JSON.parse(r);
-      if(a&&Array.isArray(a.stops)&&Array.isArray(a.done)&&a.active){ activeRoute=a; } }
-  }catch(e){ activeRoute=null; }
-}
-// Start tracking a generated route. stops = office objects in planned order.
-function startLiveRoute(stops){
-  const ids=(stops||[]).map(o=>o.id).filter(Boolean);
-  if(ids.length<2){ activeRoute=null; saveRoute(); renderRouteBar(); return; }
-  activeRoute={stops:ids, done:[], active:true};
-  saveRoute(); renderRouteBar();
-}
-function endLiveRoute(){ activeRoute=null; saveRoute(); renderRouteBar(); }
-// Remaining stops = planned order minus done, in order.
-function routeRemaining(){
-  if(!activeRoute) return [];
-  return activeRoute.stops.filter(id=>activeRoute.done.indexOf(id)<0);
-}
-// Called whenever a visit is logged. If the logged office is on the route, mark it
-// done. If the rep logged a LATER stop while earlier ones are still pending, those
-// skipped earlier stops move to the END of the remaining order (deferred, not lost).
-function routeCheckoff(officeId){
-  if(!activeRoute||!activeRoute.active) return;
-  const stops=activeRoute.stops, done=activeRoute.done;
-  const idx=stops.indexOf(officeId);
-  if(idx<0) return;                 // logged office isn't part of this route
-  if(done.indexOf(officeId)>=0){ renderRouteBar(); return; }
-  // Find earlier, still-pending stops (skipped) and move them after the rest.
-  const remainingBefore=routeRemaining();
-  const pos=remainingBefore.indexOf(officeId);
-  if(pos>0){
-    const skipped=remainingBefore.slice(0,pos);           // earlier, not yet done
-    const after=remainingBefore.slice(pos+1);             // later than the one just logged
-    // New planned tail: [just-logged removed via done], keep 'after' then skipped at end.
-    const doneSet=done.concat([officeId]);
-    const newOrder=doneSet.concat(after, skipped);
-    activeRoute.stops=newOrder.slice();
-    activeRoute.done=doneSet;
-  } else {
-    activeRoute.done=done.concat([officeId]);
-  }
-  if(routeRemaining().length===0){ toast("Route complete ✓"); activeRoute.active=false; }
-  saveRoute();
-  renderRouteBar();
-}
-function renderRouteBar(){
-  const bar=document.getElementById('routeBar'); if(!bar) return;
-  if(!activeRoute||!activeRoute.active){ bar.style.display='none'; return; }
-  const rem=routeRemaining();
-  if(!rem.length){ bar.style.display='none'; return; }
-  const nextO=DB.find(o=>o.id===rem[0]);
-  const nm=nextO?(nextO.name||'(no name)'):'—';
-  const city=nextO&&nextO.city?(' — '+nextO.city):'';
-  const rbn=document.getElementById('rb_next'); if(rbn) rbn.textContent=nm+city;
-  const rbc=document.getElementById('rb_count'); if(rbc) rbc.textContent=rem.length+' left';
-  // populate the expandable list of all remaining stops (in order), tappable to open
-  const list=document.getElementById('rb_list');
-  if(list){
-    list.innerHTML=rem.map((id,i)=>{
-      const o=DB.find(x=>x.id===id); if(!o) return '';
-      return `<div data-rbid="${id}" style="display:flex;gap:9px;align-items:baseline;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.1);cursor:pointer;">
-        <span style="font-family:var(--mono);font-weight:700;min-width:18px;opacity:.85;">${i+1}</span>
-        <span style="font-size:13px;"><b>${esc(o.name||'(no name)')}</b><span style="opacity:.75;"> — ${esc(o.city||'')}</span></span></div>`;
-    }).join('');
-    list.querySelectorAll('[data-rbid]').forEach(el=>{
-      el.onclick=()=>{ const id=el.getAttribute('data-rbid'); if(id) openDetail(id); };
-    });
-  }
-  bar.style.display='flex';
-}
-
-// Ask OpenRouteService to reorder stops by real DRIVING distance (TSP optimization).
-// `stops` are office objects; `startLat/Lng` is the rep's start (null in anchor mode,
-// where the anchor itself is already stops[0] and must stay first). Returns a new
-// ordered array, or null on any failure (caller keeps the straight-line order).
-function optimizeOrderORS(stops, startLat, startLng, anchorMode){
-  return new Promise((resolve)=>{
-    try{
-      if(!ORS_KEY || !stops || stops.length<3){ resolve(null); return; }
-      // In anchor mode the first stop is fixed; optimize the rest from there.
-      const fixed = anchorMode ? stops[0] : null;
-      const toOpt = anchorMode ? stops.slice(1) : stops.slice();
-      if(toOpt.length<2){ resolve(null); return; }
-      const startLngLat = anchorMode ? [ +fixed.lng, +fixed.lat ]
-                        : (startLat!=null ? [ +startLng, +startLat ] : [ +toOpt[0].lng, +toOpt[0].lat ]);
-      const jobs = toOpt.map((o,i)=>({id:i+1, location:[+o.lng, +o.lat]}));
-      const vehicles = [{id:1, profile:"driving-car", start:startLngLat, end:startLngLat}];
-      fetch("https://api.openrouteservice.org/optimization",{
-        method:"POST",
-        headers:{"Authorization":ORS_KEY,"Content-Type":"application/json"},
-        body:JSON.stringify({jobs, vehicles})
-      }).then(r=>r.ok?r.json():Promise.reject(r.status)).then(res=>{
-        const steps=res&&res.routes&&res.routes[0]&&res.routes[0].steps;
-        if(!steps){ resolve(null); return; }
-        const order=steps.filter(s=>s.type==="job").map(s=>toOpt[s.id-1]).filter(Boolean);
-        if(order.length!==toOpt.length){ resolve(null); return; }
-        resolve(anchorMode ? [fixed].concat(order) : order);
-      }).catch(()=>resolve(null));
-    }catch(e){ resolve(null); }
-  });
-}
-// Draw the planned route on the map: numbered pins in order + a line. The line
-// follows actual ROADS via OpenRouteService when a key is set; if the service is
-// unreachable or no key, it falls back to a straight line so it never breaks.
-function _drawRouteBase(coordsLatLng, ordered){
-  routeLayer=L.layerGroup();
-  L.polyline(coordsLatLng,{color:'#0e6a73',weight:9,opacity:.55,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // casing
-  L.polyline(coordsLatLng,{color:'#23bfcd',weight:5,opacity:.95,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // main
-  ordered.forEach((o,i)=>{
-    const icon=L.divIcon({className:'',html:`<div class="routepin">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-14]});
-    const m=L.marker([+o.lat,+o.lng],{icon,zIndexOffset:1000});
-    m.bindPopup(()=>popupHTML(o),{minWidth:230,maxWidth:260}); m._oid=o.id; m.addTo(routeLayer);
-  });
-  routeLayer.addTo(mapObj);
-  const cb=document.getElementById('clearRoute'); if(cb) cb.style.display='block';
-  try{ mapObj.fitBounds(L.latLngBounds(coordsLatLng),{padding:[60,60],maxZoom:15}); }catch(e){}
-}
-function drawRouteOverlay(ordered, startLat, startLng){
-  if(!mapObj) return;
-  clearRouteOverlay();
-  const pts=(ordered||[]).filter(o=>o&&o.lat&&o.lng);
-  if(!pts.length) return;
-  // straight-line waypoints (used directly as fallback, and as the marker order)
-  const straight=pts.map(o=>[+o.lat,+o.lng]);
-  if(startLat!=null && startLng!=null) straight.unshift([+startLat,+startLng]);
-  // Build ORS waypoints as [lng,lat]
-  const orsCoords=straight.map(c=>[c[1],c[0]]);
-  // Try road-following first; fall back to straight line on any failure.
-  if(ORS_KEY && orsCoords.length>=2 && orsCoords.length<=50){
-    const body=JSON.stringify({coordinates:orsCoords});
-    fetch("https://api.openrouteservice.org/v2/directions/driving-car/geojson",{
-      method:"POST",
-      headers:{"Authorization":ORS_KEY,"Content-Type":"application/json"},
-      body
-    }).then(r=>r.ok?r.json():Promise.reject(r.status)).then(geo=>{
-      const line=geo&&geo.features&&geo.features[0]&&geo.features[0].geometry&&geo.features[0].geometry.coordinates;
-      if(line&&line.length){ _drawRouteBase(line.map(c=>[c[1],c[0]]), pts); }
-      else { _drawRouteBase(straight, pts); }
-    }).catch(()=>{ _drawRouteBase(straight, pts); });  // network/quota/key issue -> straight line
-  } else {
-    _drawRouteBase(straight, pts);
-  }
-}
+function drawRouteOverlay(){ /* overlay intentionally not drawn */ }
 // Inline onclick inside a Leaflet popup is unreliable, so bind real listeners on popupopen.
 function wirePopup(e){
   const el = (e.popup && e.popup.getElement) ? e.popup.getElement() : null;
@@ -2356,7 +2185,6 @@ function saveForm(id,getScan,getVisits,getActive){
   save(true); rebuild(); render();
   toast("Saved",true);
   const newId=id||data.id;
-  routeCheckoff(newId);
   openDetail(newId);
 }
 
@@ -2395,7 +2223,6 @@ function quickNote(id){
     const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; a.visits=newVisits; }
   }
   save(true); rebuild(); render();
-  routeCheckoff(id);
   // re-open this marker's popup with the freshly saved note
   if(clusterLayer){
     clusterLayer.eachLayer(m=>{ if(m._oid===id){ try{ clusterLayer.zoomToShowLayer(m,()=>m.openPopup()); }catch(e){ m.openPopup(); } } });
@@ -2495,20 +2322,9 @@ function openRoute(){
   }
   function renderRoute(){
     rebuildStopOptions(currentPool().length);
-    let ordered=computeOrdered();
-    // Always start the route from the rep's current location when we have GPS —
-    // even with an anchor (the anchor becomes the first office to visit, but the
-    // trip still begins where the rep physically is).
-    const sLat=haveGPS?userPos.lat:null;
-    const sLng=haveGPS?userPos.lng:null;
-    paintRoute();
-    // Ask ORS to optimize the stop ORDER by real driving distance, then re-render
-    // with the better order so it flows into the list, the map, AND Apple Maps.
-    // Anchor stays first. Falls back silently to the straight-line order on any failure.
-    optimizeOrderORS(ordered, sLat, sLng, !!anchorId).then(better=>{
-      if(better && better.length===ordered.length){ ordered=better; paintRoute(); }
-    }).catch(()=>{});
-    function paintRoute(){
+    const ordered=computeOrdered();
+    const sLat=(!anchorId&&haveGPS)?userPos.lat:null;
+    const sLng=(!anchorId&&haveGPS)?userPos.lng:null;
     drawRouteOverlay(ordered, sLat, sLng);
     $('rt_list').innerHTML=ordered.length?ordered.map((o,i)=>`<div style="display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line);">
       <span style="font-family:var(--mono);font-weight:700;color:var(--amber);min-width:20px;">${i+1}</span>
@@ -2518,8 +2334,7 @@ function openRoute(){
       ? "Routing from your chosen office through the nearest offices around it."
       : (haveGPS?"Routing from your current location. Or search an office above to anchor the route there."
                 :"Tip: tap the locate button on the map to start from where you are, or search an office above to anchor the route.");
-    $('rt_apple').onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); startLiveRoute(ordered); if(u){ try{ location.href=u; }catch(e){ window.open(u,'_blank'); } } };
-    }
+    $('rt_apple').onclick=()=>{ const u=routeAppleURL(ordered,sLat,sLng); if(u){ try{ location.href=u; }catch(e){ window.open(u,'_blank'); } } };
   }
   function showAnchorChip(){
     const a=anchorId?DB.find(o=>o.id===anchorId):null;
@@ -2879,18 +2694,6 @@ function wire(){
   on('locateBtn','click',locateMe);
   on('nearbyBtn','click',toggleNearby);
   on('routeBtn','click',openRoute);
-  on('clearRoute','click',clearRouteOverlay);
-  on('rb_end','click',endLiveRoute);
-  { const h=document.getElementById('rb_head'), endBtn=document.getElementById('rb_end');
-    if(endBtn) endBtn.addEventListener('click',e=>e.stopPropagation());  // End shouldn't toggle
-    if(h) h.addEventListener('click',()=>{
-      const list=document.getElementById('rb_list'), car=document.getElementById('rb_caret');
-      if(!list) return;
-      const open=list.style.display!=='none' && list.style.display!=='';
-      list.style.display=open?'none':'block';
-      if(car) car.textContent=open?'▾':'▴';
-    });
-  }
   on('radMinus','click',()=>changeRadius(-1));
   on('radPlus','click',()=>changeRadius(1));
   on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
@@ -2971,7 +2774,6 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
     if(m && !DB.length){ m.innerHTML='<div class="empty"><h3>Couldn\'t load the office list</h3><p>Pull to refresh or reopen the app. Your synced offices and the menu still work.</p></div>'; }
     setSyncBadge(); return; }
   rebuild(); render();
-  loadRoute(); renderRouteBar();   // restore an in-progress route after reopen/refresh
   setSyncBadge();
   updateMeBadge();
   if(!ME) setTimeout(openWhoAmI,400);   // first-open identity prompt
