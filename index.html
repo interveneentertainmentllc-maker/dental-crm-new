@@ -482,13 +482,18 @@ body.sheet-open #mapview .leaflet-container{pointer-events:none;}
 <main id="main"><div class="loading">Decompressing 5,300+ offices…</div></main>
 <div id="mapview"><div id="map"></div><div id="mapcount"></div>
   <button id="clearRoute" style="display:none;position:absolute;bottom:calc(var(--safe-bottom) + 132px);left:50%;transform:translateX(-50%);z-index:560;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:18px;padding:6px 14px;font-size:12.5px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;">✕ Clear route</button>
-  <div id="routeBar" style="display:none;position:absolute;top:8px;left:14px;right:14px;max-width:360px;margin:0 auto;z-index:555;background:var(--teal-deep);color:#fff;border-radius:12px;box-shadow:var(--shadow-lg);padding:9px 12px;display:none;align-items:center;gap:10px;">
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.8;font-weight:600;">Next stop</div>
-      <div id="rb_next" style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+  <div id="routeBar" style="display:none;position:absolute;top:8px;left:14px;right:14px;max-width:360px;margin:0 auto;z-index:555;background:var(--teal-deep);color:#fff;border-radius:12px;box-shadow:var(--shadow-lg);overflow:hidden;flex-direction:column;">
+    <div id="rb_head" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.8;font-weight:600;">Next stop <span id="rb_caret">▾</span></div>
+        <div id="rb_next" style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+      </div>
+      <div id="rb_count" style="font-size:12px;font-family:var(--mono);opacity:.9;white-space:nowrap;">0 left</div>
+      <button id="rb_end" style="background:rgba(255,255,255,.16);border:none;color:#fff;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:600;cursor:pointer;">End</button>
     </div>
-    <div id="rb_count" style="font-size:12px;font-family:var(--mono);opacity:.9;white-space:nowrap;">0 left</div>
-    <button id="rb_end" style="background:rgba(255,255,255,.16);border:none;color:#fff;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:600;cursor:pointer;">End</button>
+    <div id="rb_list" style="display:none;max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch;background:rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.15);"></div>
+  </div>
+  <div class="prox-banner" id="proxBanner"></div>;border:none;color:#fff;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:600;cursor:pointer;">End</button>
   </div>
   <div class="prox-banner" id="proxBanner"></div>
   <div class="rad-ctrl" id="radCtrl">
@@ -1591,6 +1596,19 @@ function renderRouteBar(){
   const city=nextO&&nextO.city?(' — '+nextO.city):'';
   const rbn=document.getElementById('rb_next'); if(rbn) rbn.textContent=nm+city;
   const rbc=document.getElementById('rb_count'); if(rbc) rbc.textContent=rem.length+' left';
+  // populate the expandable list of all remaining stops (in order), tappable to open
+  const list=document.getElementById('rb_list');
+  if(list){
+    list.innerHTML=rem.map((id,i)=>{
+      const o=DB.find(x=>x.id===id); if(!o) return '';
+      return `<div data-rbid="${id}" style="display:flex;gap:9px;align-items:baseline;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.1);cursor:pointer;">
+        <span style="font-family:var(--mono);font-weight:700;min-width:18px;opacity:.85;">${i+1}</span>
+        <span style="font-size:13px;"><b>${esc(o.name||'(no name)')}</b><span style="opacity:.75;"> — ${esc(o.city||'')}</span></span></div>`;
+    }).join('');
+    list.querySelectorAll('[data-rbid]').forEach(el=>{
+      el.onclick=()=>{ const id=el.getAttribute('data-rbid'); if(id) openDetail(id); };
+    });
+  }
   bar.style.display='flex';
 }
 
@@ -2478,8 +2496,11 @@ function openRoute(){
   function renderRoute(){
     rebuildStopOptions(currentPool().length);
     let ordered=computeOrdered();
-    const sLat=(!anchorId&&haveGPS)?userPos.lat:null;
-    const sLng=(!anchorId&&haveGPS)?userPos.lng:null;
+    // Always start the route from the rep's current location when we have GPS —
+    // even with an anchor (the anchor becomes the first office to visit, but the
+    // trip still begins where the rep physically is).
+    const sLat=haveGPS?userPos.lat:null;
+    const sLng=haveGPS?userPos.lng:null;
     paintRoute();
     // Ask ORS to optimize the stop ORDER by real driving distance, then re-render
     // with the better order so it flows into the list, the map, AND Apple Maps.
@@ -2860,6 +2881,16 @@ function wire(){
   on('routeBtn','click',openRoute);
   on('clearRoute','click',clearRouteOverlay);
   on('rb_end','click',endLiveRoute);
+  { const h=document.getElementById('rb_head'), endBtn=document.getElementById('rb_end');
+    if(endBtn) endBtn.addEventListener('click',e=>e.stopPropagation());  // End shouldn't toggle
+    if(h) h.addEventListener('click',()=>{
+      const list=document.getElementById('rb_list'), car=document.getElementById('rb_caret');
+      if(!list) return;
+      const open=list.style.display!=='none' && list.style.display!=='';
+      list.style.display=open?'none':'block';
+      if(car) car.textContent=open?'▾':'▴';
+    });
+  }
   on('radMinus','click',()=>changeRadius(-1));
   on('radPlus','click',()=>changeRadius(1));
   on('btnEmail','click',()=>{hideSheet();setTimeout(emailCSV,200);});
