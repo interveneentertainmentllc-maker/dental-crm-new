@@ -1301,12 +1301,17 @@ function haversine(lat1,lng1,lat2,lng2){
 // routeOptimize so we avoid the greedy zig-zag.
 function selectNearest(offices, lat, lng, n){
   const valid=o=>o.lat&&o.lng&&Math.abs(+o.lat)>0.01&&Math.abs(+o.lng)>0.01&&Math.abs(+o.lat)<=90&&Math.abs(+o.lng)<=180;
-  const scored=offices.filter(valid).map(o=>({o,lat:+o.lat,lng:+o.lng,d:haversine(lat,lng,+o.lat,+o.lng)}))
+  const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  const keyOf=o=>norm(o.name)+"|"+norm(o.addr);
+  const scored=offices.filter(valid).map(o=>({o,lat:+o.lat,lng:+o.lng,key:keyOf(o),d:haversine(lat,lng,+o.lat,+o.lng)}))
                        .sort((a,b)=>a.d-b.d);
-  const out=[]; const placed=[];
+  const out=[]; const placed=[]; const keys=new Set();
   for(const s of scored){
+    // Same office if within ~60ft OR identical name+address (handles duplicates
+    // whose geocoded coordinates differ slightly but are really the same place).
     if(placed.some(p=>feetBetween(p.lat,p.lng,s.lat,s.lng)<60)) continue;
-    placed.push(s); out.push(s.o);
+    if(s.key!=="|" && keys.has(s.key)) continue;
+    placed.push(s); keys.add(s.key); out.push(s.o);
     if(out.length>=n) break;
   }
   return out;
@@ -1649,7 +1654,7 @@ function _drawRouteBase(coordsLatLng, ordered){
   L.polyline(coordsLatLng,{color:'#23bfcd',weight:5,opacity:.95,lineCap:'round',lineJoin:'round'}).addTo(routeLayer); // main
   ordered.forEach((o,i)=>{
     const icon=L.divIcon({className:'',html:`<div class="routepin">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-14]});
-    const m=L.marker([+o.lat,+o.lng],{icon,zIndexOffset:1000});
+    const m=L.marker([+o.lat,+o.lng],{icon,zIndexOffset:1500});
     m.bindPopup(()=>popupHTML(o),{minWidth:230,maxWidth:260}); m._oid=o.id; m.addTo(routeLayer);
   });
   routeLayer.addTo(mapObj);
