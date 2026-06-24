@@ -2481,21 +2481,36 @@ function openRoute(){
     sel.innerHTML=html;
     stopN=Math.min(prev,maxN); if(stopN<2)stopN=Math.min(2,maxN); sel.value=String(stopN);
   }
-  function computeOrdered(){
+  // Final safety pass: remove duplicate stops from an ordered list by exact
+// coordinates OR exact (normalized) address — independent of name — so the same
+// place never appears twice in the list OR in the Apple Maps hand-off. Runs on the
+// FINAL list both display and Apple Maps use, so they can never diverge.
+function dedupeStops(list){
+  const out=[]; const seenAddr=new Set(); const placed=[];
+  const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  for(const o of (list||[])){
+    if(!o) continue;
+    const addrKey=norm(o.addr);
+    if(addrKey && seenAddr.has(addrKey)) continue;                    // same street address
+    if(o.lat&&o.lng&&placed.some(p=>feetBetween(p.lat,p.lng,+o.lat,+o.lng)<60)) continue; // same spot
+    if(addrKey) seenAddr.add(addrKey);
+    if(o.lat&&o.lng) placed.push({lat:+o.lat,lng:+o.lng});
+    out.push(o);
+  }
+  return out;
+}
+function computeOrdered(){
     const pool=currentPool();
     if(anchorId){
       const anchor=DB.find(o=>o.id===anchorId);
       if(!anchor||!anchor.lat||!anchor.lng) return [];
       const rest=pool.filter(o=>o.id!==anchorId);
-      // Pick the (stopN-1) offices CLOSEST TO THE ANCHOR, then order them
-      // efficiently starting from the anchor.
       const near=selectNearest(rest, +anchor.lat, +anchor.lng, Math.max(stopN-1,0));
-      return routeOptimize(near, +anchor.lat, +anchor.lng, anchor);
+      return dedupeStops(routeOptimize(near, +anchor.lat, +anchor.lng, anchor));
     }
     if(haveGPS){
-      // Pick the stopN offices CLOSEST TO THE REP, then order them efficiently.
       const near=selectNearest(pool, userPos.lat, userPos.lng, stopN);
-      return routeOptimize(near, userPos.lat, userPos.lng, null);
+      return dedupeStops(routeOptimize(near, userPos.lat, userPos.lng, null));
     }
     if(!pool.length) return [];
     const near=selectNearest(pool, +pool[0].lat, +pool[0].lng, stopN);
