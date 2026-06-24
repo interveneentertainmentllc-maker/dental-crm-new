@@ -336,8 +336,8 @@ body.sheet-open #mapview{z-index:0;}
 .cal-empty h3{color:var(--ink);margin:0 0 6px;}
 .cal-setme{margin-top:12px;background:var(--teal);color:#fff;border-radius:12px;padding:10px 18px;font-weight:700;}
 body.sheet-open #mapview .leaflet-container{pointer-events:none;}
-#map{flex:1;width:100%;height:100%;background:var(--surface-2);-webkit-touch-callout:none;}
-#map .leaflet-tile-container,#map .leaflet-tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+#map{flex:1;width:100%;height:100%;background:var(--surface-2);-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
+#map .leaflet-tile-container,#map .leaflet-tile,#map .leaflet-container{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
 #mapcount{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:500;background:var(--teal-deep);color:#fff;font-size:12px;font-weight:600;font-family:var(--mono);padding:6px 14px;border-radius:20px;box-shadow:var(--shadow);pointer-events:none;}
 .routepin{width:26px;height:26px;border-radius:50%;background:var(--amber);color:#fff;font-family:var(--mono);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(22,33,29,.35);}
 .routepin.first{width:32px;height:32px;font-size:15px;background:var(--green);border:3px solid #fff;box-shadow:0 3px 9px rgba(22,33,29,.5);}
@@ -1423,7 +1423,7 @@ function buildMap(){
     cancelLongPress();
     _lpStart={x:clientX,y:clientY};
     const ll=ptToLatLng(clientX, clientY);
-    _lpTimer=setTimeout(()=>{ _lpTimer=null; _lpStart=null; dropPinAt(ll); }, 600);
+    _lpTimer=setTimeout(()=>{ _lpTimer=null; _lpStart=null; if(navigator.vibrate){try{navigator.vibrate(20);}catch(e){}} dropPinAt(ll); }, 500);
   }
   function moveLP(clientX, clientY){
     if(_lpStart){ const dx=Math.abs(clientX-_lpStart.x), dy=Math.abs(clientY-_lpStart.y); if(dx>10||dy>10) cancelLongPress(); }
@@ -1434,6 +1434,9 @@ function buildMap(){
   mapEl.addEventListener('touchmove', (ev)=>{ if(ev.touches&&ev.touches.length){ const t=ev.touches[0]; moveLP(t.clientX, t.clientY); } }, {passive:true});
   mapEl.addEventListener('touchend', cancelLongPress, {passive:true});
   mapEl.addEventListener('touchcancel', cancelLongPress, {passive:true});
+  // Stop iOS from interpreting the long-press as text selection / callout menu,
+  // which was sometimes highlighting text instead of dropping a pin.
+  mapEl.addEventListener('contextmenu', (ev)=>{ ev.preventDefault(); });
   // Mouse (desktop) — secondary fallback.
   mapEl.addEventListener('mousedown', (ev)=>{ if(ev.button) return; if(ev.target&&ev.target.closest&&ev.target.closest('.leaflet-control,.leaflet-marker-icon,.leaflet-popup')) return; beginLP(ev.clientX, ev.clientY); });
   mapEl.addEventListener('mousemove', (ev)=>{ moveLP(ev.clientX, ev.clientY); });
