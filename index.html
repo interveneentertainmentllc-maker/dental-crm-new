@@ -1300,13 +1300,16 @@ function haversine(lat1,lng1,lat2,lng2){
 // Pick the N offices geographically CLOSEST to a point (start/anchor), dropping
 // junk coords and same-spot duplicates. Selection only — ordering is done by
 // routeOptimize so we avoid the greedy zig-zag.
-function selectNearest(offices, lat, lng, n){
+function selectNearest(offices, lat, lng, n, preSeed){
   const valid=o=>o.lat&&o.lng&&Math.abs(+o.lat)>0.01&&Math.abs(+o.lng)>0.01&&Math.abs(+o.lat)<=90&&Math.abs(+o.lng)<=180;
   const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]/g,"");
-  const keyOf=o=>norm(o.addr);   // dedup by ADDRESS (matches dedupeStops); selection keeps going until N unique
+  const keyOf=o=>norm(o.addr);   // dedup by ADDRESS; selection keeps going until N unique
   const scored=offices.filter(valid).map(o=>({o,lat:+o.lat,lng:+o.lng,key:keyOf(o),d:haversine(lat,lng,+o.lat,+o.lng)}))
                        .sort((a,b)=>a.d-b.d);
   const out=[]; const placed=[]; const keys=new Set();
+  // Seed dedup state with offices already in the route (e.g. the anchor), so we
+  // don't pick a duplicate of them and we still return the full N.
+  (preSeed||[]).forEach(o=>{ if(o){ const k=keyOf(o); if(k)keys.add(k); if(o.lat&&o.lng)placed.push({lat:+o.lat,lng:+o.lng}); } });
   for(const s of scored){
     // Same office if within ~60ft OR identical name+address (handles duplicates
     // whose geocoded coordinates differ slightly but are really the same place).
@@ -2505,12 +2508,14 @@ function computeOrdered(){
       const anchor=DB.find(o=>o.id===anchorId);
       if(!anchor||!anchor.lat||!anchor.lng) return [];
       const rest=pool.filter(o=>o.id!==anchorId);
-      const near=selectNearest(rest, +anchor.lat, +anchor.lng, Math.max(stopN-1,0));
-      return dedupeStops(routeOptimize(near, +anchor.lat, +anchor.lng, anchor));
+      // Select stopN-1 offices closest to the anchor, deduped by address AND against
+      // the anchor itself, so we always end up with stopN distinct stops (anchor + rest).
+      const near=selectNearest(rest, +anchor.lat, +anchor.lng, Math.max(stopN-1,0), [anchor]);
+      return routeOptimize(near, +anchor.lat, +anchor.lng, anchor);
     }
     if(haveGPS){
       const near=selectNearest(pool, userPos.lat, userPos.lng, stopN);
-      return dedupeStops(routeOptimize(near, userPos.lat, userPos.lng, null));
+      return routeOptimize(near, userPos.lat, userPos.lng, null);
     }
     if(!pool.length) return [];
     const near=selectNearest(pool, +pool[0].lat, +pool[0].lng, stopN);
