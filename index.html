@@ -1303,7 +1303,7 @@ function haversine(lat1,lng1,lat2,lng2){
 function selectNearest(offices, lat, lng, n){
   const valid=o=>o.lat&&o.lng&&Math.abs(+o.lat)>0.01&&Math.abs(+o.lng)>0.01&&Math.abs(+o.lat)<=90&&Math.abs(+o.lng)<=180;
   const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]/g,"");
-  const keyOf=o=>norm(o.name)+"|"+norm(o.addr);
+  const keyOf=o=>norm(o.addr);   // dedup by ADDRESS (matches dedupeStops); selection keeps going until N unique
   const scored=offices.filter(valid).map(o=>({o,lat:+o.lat,lng:+o.lng,key:keyOf(o),d:haversine(lat,lng,+o.lat,+o.lng)}))
                        .sort((a,b)=>a.d-b.d);
   const out=[]; const placed=[]; const keys=new Set();
