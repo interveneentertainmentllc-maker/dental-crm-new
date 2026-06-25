@@ -1260,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41m";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41n";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1756,7 +1756,10 @@ function setOnboarding(id, field, on){
       visitDay:o.visitDay,notes:o.notes,visits:o.visits,visited:o.visited,active:o.active,
       starterKit:o.starterKit,welcomeEmail:o.welcomeEmail,addedBy:o.addedBy};
     const patch={}; patch[field]=val;
-    store.over[idx]=Object.assign({},base,existing,patch);
+    // Re-read the override at WRITE time (not captured earlier) so two rapid ticks
+    // on different boxes both land — the second tick must build on the first's result.
+    const current=store.over[idx]||existing;
+    store.over[idx]=Object.assign({},base,current,patch);
   } else {
     const a=store.add.find(x=>x.id===id); if(a)a[field]=val;
   }
@@ -2836,6 +2839,12 @@ function openSync(){
     '    if(email) lines.push("Office email: "+email);',
     '    try{ MailApp.sendEmail(ADMIN_EMAIL, subject, lines.join("\\n")); }catch(mailErr){ /* never break sync over an email */ }',
     '  }',
+    '}',
+    '// RUN THIS ONCE from the Apps Script editor (pick testOnboardingEmail in the',
+    '// function dropdown, click Run) to confirm email works. It sends you a sample.',
+    'function testOnboardingEmail(){',
+    '  if(!ADMIN_EMAIL){ throw new Error("Set ADMIN_EMAIL at the top of the script first."); }',
+    '  MailApp.sendEmail(ADMIN_EMAIL, "Salesly onboarding test", "If you got this, onboarding email notifications are working. Office flags will email you here.");',
     '}',
     '// Build a single "Onboarding" tab: one row per visit (like the rep tabs) with',
     '// full office info PLUS the per-office Starter Kit / Welcome Email status, so you',
