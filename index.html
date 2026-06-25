@@ -235,6 +235,12 @@ body.cal-view .fab{display:none;}
 .toast .undo{color:var(--amber);font-weight:700;text-decoration:underline;pointer-events:auto;}
 
 .statbar{display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--line);}
+.onbox{display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;}
+.onrow{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink);cursor:pointer;}
+.onrow input[type=checkbox]{width:20px;height:20px;accent-color:var(--teal-deep);flex:0 0 auto;}
+.popup-onbox{display:flex;flex-direction:column;gap:7px;margin:2px 0 8px;padding:8px 10px;background:var(--teal-wash);border-radius:9px;}
+.popup-onrow{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);cursor:pointer;}
+.popup-onrow input[type=checkbox]{width:17px;height:17px;accent-color:var(--teal-deep);flex:0 0 auto;}
 .stat{flex:1;text-align:center;padding:9px 4px;border-right:1px solid var(--line);}
 .stat:last-child{border-right:none;}
 .stat .sv{font-family:var(--display);font-weight:700;font-size:17px;}
@@ -614,7 +620,7 @@ function storeToRows(){
     const F=(k,si)=>{ if(o[k]!=null&&o[k]!=="")return o[k]; if(live&&live[k]!=null&&live[k]!=="")return live[k]; if(seed&&seed[si]!=null&&seed[si]!=="")return seed[si]; return ""; };
     rows.push({id,name:F("name",0),addr:F("addr",1),city:F("city",2),zip:F("zip",3),lat:F("lat",4),lng:F("lng",5),
       phone:o.phone||"",email:o.email||"",scanner:o.scanner||"",lab:o.lab||"",drs:o.drs||"",hours:o.hours||"",
-      visitDay:o.visitDay||"",visited:visitedCell(o),notes:o.notes||"",visits:visitsToString(parseVisits(o.visits))});
+      visitDay:o.visitDay||"",visited:visitedCell(o),notes:o.notes||"",visits:visitsToString(parseVisits(o.visits)),starterKit:o.starterKit||"",welcomeEmail:o.welcomeEmail||""});
   });
   // deleted seed offices
   (store.del||[]).forEach(idx=>{ rows.push({id:"s"+idx,name:"",visited:"DELETED",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visits:""}); });
@@ -642,7 +648,7 @@ function rowsToStore(rows){
       if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!(r.visits&&String(r.visits).trim())&&visited.indexOf("inactive")<0) return;
       ns.over[idx]={name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
-        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||""};
+        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||""};
     } else {
       if(visited==="deleted") return; // a deleted custom office just disappears
       // De-duplicate added offices: skip if we've already taken this id,
@@ -653,7 +659,7 @@ function rowsToStore(rows){
       seenAddId[id]=1; if(key!=="||")seenAddKey[key]=1;
       ns.add.push({id,name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
-        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",seed:false});
+        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||"",seed:false});
     }
   });
   return ns;
@@ -988,7 +994,7 @@ function rebuild(){
   SEED.forEach((r,i)=>{
     if(delSet.has(i))return;
     const o={id:"s"+i,seed:true,name:r[0],addr:r[1],city:r[2],zip:r[3],lat:r[4],lng:r[5],county:r[6],
-             phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visited:false,active:true};
+             phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",starterKit:"",welcomeEmail:"",visited:false,active:true};
     const ov=store.over[i];
     if(ov)Object.assign(o,ov);
     DB.push(norm(o));
@@ -1522,6 +1528,10 @@ function popupHTML(o){
     ${noteBlock}
     <textarea class="popup-quick" id="pq_${o.id}" placeholder="Add a quick note…"></textarea>
     <button class="popup-btn add" data-pop-note="${o.id}" style="margin-bottom:6px;">Save note</button>
+    <div class="popup-onbox">
+      <label class="popup-onrow"><input type="checkbox" data-pop-kit="${o.id}" ${o.starterKit==='Yes'?'checked':''}> <span>Send Starter Kit</span></label>
+      <label class="popup-onrow"><input type="checkbox" data-pop-welcome="${o.id}" ${o.welcomeEmail==='Yes'?'checked':''}> <span>Send Welcome Email</span></label>
+    </div>
     <div class="popup-row">
       <button class="popup-btn ghost" data-pop-view="${o.id}">View</button>
       <button class="popup-btn ghost" data-pop-edit="${o.id}">Edit</button>
@@ -1705,6 +1715,28 @@ function wirePopup(e){
   if(view) view.onclick = function(){ openDetail(view.getAttribute('data-pop-view')); };
   if(edit) edit.onclick = function(){ openForm(edit.getAttribute('data-pop-edit')); };
   if(note) note.onclick = function(){ quickNote(note.getAttribute('data-pop-note')); };
+  const kit = el.querySelector('[data-pop-kit]');
+  const wel = el.querySelector('[data-pop-welcome]');
+  if(kit) kit.onchange = function(){ setOnboarding(kit.getAttribute('data-pop-kit'),'starterKit',kit.checked); };
+  if(wel) wel.onchange = function(){ setOnboarding(wel.getAttribute('data-pop-welcome'),'welcomeEmail',wel.checked); };
+}
+// Set an onboarding flag (starterKit / welcomeEmail) on an office and save. Used by
+// the map popup checkboxes (the office form saves these via saveForm instead).
+function setOnboarding(id, field, on){
+  if(!id) return;
+  const val=on?'Yes':'';
+  if(id[0]==="s"){
+    const idx=parseInt(id.slice(1),10);
+    const o=officeById(id)||{};
+    const base=store.over[idx]||{name:o.name,addr:o.addr,city:o.city,zip:o.zip,lat:o.lat,lng:o.lng,
+      phone:o.phone,email:o.email,scanner:o.scanner,lab:o.lab,drs:o.drs,hours:o.hours,visitDay:o.visitDay,notes:o.notes,addedBy:o.addedBy};
+    const patch={}; patch[field]=val;
+    store.over[idx]=Object.assign({},base,patch);
+  } else {
+    const a=store.add.find(x=>x.id===id); if(a)a[field]=val;
+  }
+  save(true); rebuild();
+  toast(val?(field==='starterKit'?'Starter Kit flagged':'Welcome Email flagged'):'Cleared',true);
 }
 function refreshMap(filtered){
   buildMap();
@@ -2184,7 +2216,7 @@ function openDetail(id){
 function openForm(id, prefill){
   if(mapObj){try{mapObj.closePopup();}catch(e){}}
   const isNew=!id;
-  const o=isNew?{name:"",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visits:[]}:officeById(id);
+  const o=isNew?{name:"",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",starterKit:"",welcomeEmail:"",visits:[]}:officeById(id);
   if(isNew && prefill){ if(prefill.lat!=null)o.lat=prefill.lat; if(prefill.lng!=null)o.lng=prefill.lng;
     if(prefill.addr)o.addr=prefill.addr; if(prefill.city)o.city=prefill.city; if(prefill.zip)o.zip=prefill.zip; }
   document.getElementById('sheetTitle').textContent=isNew?"Add Office":"Edit Office";
@@ -2235,6 +2267,12 @@ function openForm(id, prefill){
         </div>
         <input id="f_vnote" class="vnote" type="text" placeholder="Optional note (e.g. uses competitor, follow up)">
         <div id="f_visitlist" class="visitlist"></div>
+      </div>
+    </div>
+    <div class="fld"><label>Onboarding</label>
+      <div class="onbox">
+        <label class="onrow"><input type="checkbox" id="f_starterkit" ${o.starterKit==='Yes'?'checked':''}> <span>Send Starter Kit</span></label>
+        <label class="onrow"><input type="checkbox" id="f_welcomeemail" ${o.welcomeEmail==='Yes'?'checked':''}> <span>Send Welcome Email</span></label>
       </div>
     </div>
     <div class="actions">
@@ -2339,13 +2377,15 @@ function saveForm(id,getScan,getVisits,getActive){
     lat:parseFloat(g('f_lat'))||"",lng:parseFloat(g('f_lng'))||"",
     phone:g('f_phone'),email:g('f_email'),scanner:getScan(),lab:g('f_lab'),
     drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes'),visits,
+    starterKit:(document.getElementById('f_starterkit')&&document.getElementById('f_starterkit').checked)?'Yes':'',
+    welcomeEmail:(document.getElementById('f_welcomeemail')&&document.getElementById('f_welcomeemail').checked)?'Yes':'',
     active:(getActive?getActive():true)};
   // AUTO-LOG A VISIT ON EDIT: if this is an existing office and the rep actually
   // changed a field (note, scanner, hours, etc. — or the visit list itself),
   // record a visit dated today (carrying the last status color), so they don't
   // have to tap "Log visit". One per day max (ensureVisitToday guards that).
   if(id && existing){
-    const fields=["name","addr","city","zip","phone","email","scanner","lab","drs","hours","visitDay","notes"];
+    const fields=["name","addr","city","zip","phone","email","scanner","lab","drs","hours","visitDay","notes","starterKit","welcomeEmail"];
     const fieldChanged=fields.some(k=>String((data[k]==null?"":data[k]))!==String((existing[k]==null?"":existing[k])));
     const visitsChanged=visitsToString(visits)!==visitsToString(parseVisits(existing.visits));
     if(fieldChanged||visitsChanged){
@@ -2623,7 +2663,7 @@ function openSync(){
     '// Tab 1 (offices): one editable row per office (unchanged, fully wipe-protected).',
     '// Tab 2 ("VisitLog"): one row per visit, APPEND-ONLY. Never edited or cleared by',
     '// the app, so it is a safe, readable, sortable activity ledger.',
-    'var COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits"];',
+    'var COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail"];',
     'var LOG_COLS=["logId","office","city","date","status","note","rep","officeId"];',
     '// Shared secret. Must EXACTLY match GS_TOKEN in the app. Change BOTH together.',
     'var TOKEN="Nh08rwbEMdxBvJDy-D_LAMo1";',
@@ -2723,8 +2763,36 @@ function openSync(){
     '  // Mirror each new visit into a per-rep tab ("Visits - <rep>"). The master',
     '  // VisitLog above stays the single source of truth; these are convenience copies.',
     '  try{ mirrorToRepTabs_(add); }catch(repErr){ /* per-rep mirror must never break sync */ }',
+    '  try{ buildOnboardingTab_(); }catch(onbErr){ /* onboarding tab must never break sync */ }',
     '}',
-    '// Rebuild each per-rep tab from the ENTIRE master VisitLog every sync. Each row',
+    '// Build a single "Onboarding" tab: one row per visit (like the rep tabs) with',
+    '// full office info PLUS the per-office Starter Kit / Welcome Email status, so you',
+    '// can fulfill kits/emails on the back end. Rebuilt fresh each sync. The master',
+    '// VisitLog stays untouched as the backup.',
+    'var ONB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","starterKit","welcomeEmail"];',
+    'function buildOnboardingTab_(){',
+    '  var ss=SpreadsheetApp.getActiveSpreadsheet();',
+    '  var lsh=logSheet_(); var last=lsh.getLastRow();',
+    '  if(last<2) return;',
+    '  var log=lsh.getRange(2,1,last-1,LOG_COLS.length).getValues();',
+    '  var osh=sheet_(); var oLast=osh.getLastRow(); var office={};',
+    '  if(oLast>1){ var od=osh.getRange(2,1,oLast-1,COLS.length).getValues(); for(var r=0;r<od.length;r++){ office[String(od[r][0]).trim()]=od[r]; } }',
+    '  function col(o,name){ var i=COLS.indexOf(name); return (o&&i>=0)?o[i]:""; }',
+    '  var liId=LOG_COLS.indexOf("officeId"), liDate=LOG_COLS.indexOf("date"), liStatus=LOG_COLS.indexOf("status"),',
+    '      liNote=LOG_COLS.indexOf("note"), liRep=LOG_COLS.indexOf("rep"), liOffice=LOG_COLS.indexOf("office"), liCity=LOG_COLS.indexOf("city");',
+    '  var out=[];',
+    '  for(var i=0;i<log.length;i++){',
+    '    var row=log[i]; var oid=String(row[liId]||"").trim(); var o=office[oid];',
+    '    out.push([ row[liDate], row[liStatus], row[liNote], row[liRep], row[liOffice], row[liCity], oid,',
+    '               col(o,"addr"), col(o,"zip"), col(o,"phone"), col(o,"email"), col(o,"scanner"),',
+    '               col(o,"starterKit"), col(o,"welcomeEmail") ]);',
+    '  }',
+    '  var sh=ss.getSheetByName("Onboarding");',
+    '  if(!sh){ sh=ss.insertSheet("Onboarding"); }',
+    '  sh.clearContents();',
+    '  sh.getRange(1,1,1,ONB_COLS.length).setValues([ONB_COLS]); sh.setFrozenRows(1);',
+    '  if(out.length) sh.getRange(2,1,out.length,ONB_COLS.length).setValues(out);',
+    '}',
     '// is one VISIT, enriched with the full office record (name, addr, phone, email,',
     '// scanner, lab, drs, hours, etc.) looked up from the offices sheet. Rebuilt fresh',
     '// each sync so notes/fields added later always appear.',
