@@ -600,7 +600,7 @@ function cloudInit(){
    spreadsheet. Column order must match SHEET_COLS. The app converts between
    these rows and the internal `store` {over, add, del}. A row whose "visited"
    cell is the word DELETED (or whose name is blank) marks a removed seed office. */
-const SHEET_COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits"];
+const SHEET_COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail"];
 
 // Build the array-of-rows the Sheet should contain from the current store.
 function visitedCell(o){ // compound: "Yes" / "INACTIVE" / "Yes;INACTIVE" / ""
@@ -1257,7 +1257,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41d";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41e";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
