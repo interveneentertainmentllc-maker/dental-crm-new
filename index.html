@@ -681,6 +681,12 @@ async function cloudPull(){
       const objs=doc.rows.map(arr=>{const o={};cols.forEach((c,i)=>o[c]=arr[i]==null?"":arr[i]);return o;});
       lastRawRows=objs.length;
       const ns=rowsToStore(objs);
+      // DEBUG: record what the sheet returned for any office with a flag
+      try{
+        const flagged=objs.filter(o=>o.starterKit==="Yes"||o.welcomeEmail==="Yes").map(o=>o.id+":kit="+(o.starterKit||"")+",wel="+(o.welcomeEmail||""));
+        const hasKitCol=objs.length?("starterKit" in objs[0]):false;
+        window._dbgPull="PULL sheet flags: "+(flagged.length?flagged.join(" | "):"NONE")+" | kitColExists="+hasKitCol;
+      }catch(e){ window._dbgPull="PULL dbg err"; }
       const js=JSON.stringify(ns);
       lastSyncAt=Date.now();
       // The SHEET is the source of truth for shared data. A pull simply adopts
@@ -812,6 +818,12 @@ async function cloudPush(silent){
     try{localStorage.setItem(SK,JSON.stringify(store));}catch(e){}
     const rows=storeToRows();
     const payload={cols:SHEET_COLS,rows:rows.map(r=>SHEET_COLS.map(c=>r[c]==null?"":r[c]))};
+    // DEBUG: record any row that has a starterKit/welcomeEmail flag in the OUTGOING payload
+    try{
+      const ki=SHEET_COLS.indexOf("starterKit"), wi=SHEET_COLS.indexOf("welcomeEmail");
+      const flagged=payload.rows.filter(r=>r[ki]==="Yes"||r[wi]==="Yes").map(r=>r[0]+":kit="+r[ki]+",wel="+r[wi]);
+      window._dbgPush="PUSH out flags: "+(flagged.length?flagged.join(" | "):"NONE");
+    }catch(e){ window._dbgPush="PUSH dbg err"; }
     lastSyncJSON=JSON.stringify(store);   // mark as ours so the next poll won't re-trigger
     const res=await fetch(GS_URL+(GS_URL.indexOf("?")<0?"?":"&")+"k="+encodeURIComponent(GS_TOKEN),{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
     if(!res.ok) throw new Error("http "+res.status);
@@ -1257,7 +1269,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41e";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41f";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1751,6 +1763,8 @@ function setOnboarding(id, field, on){
   }
   save(true); rebuild();
   toast(val?(field==='starterKit'?'Starter Kit flagged':'Welcome Email flagged'):'Cleared',true);
+  // DEBUG: after a short delay (let sync run), show what push sent and pull got back.
+  setTimeout(()=>{ try{ toast((window._dbgPush||"no push yet")+"  ||  "+(window._dbgPull||"no pull yet"),true); }catch(e){} }, 4000);
 }
 function refreshMap(filtered){
   buildMap();
