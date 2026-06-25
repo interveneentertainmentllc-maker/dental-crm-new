@@ -628,7 +628,7 @@ function storeToRows(){
   (store.add||[]).forEach(a=>{
     rows.push({id:a.id||("c"+Math.random().toString(36).slice(2)),name:a.name||"",addr:a.addr||"",city:a.city||"",zip:a.zip||"",
       lat:a.lat||"",lng:a.lng||"",phone:a.phone||"",email:a.email||"",scanner:a.scanner||"",lab:a.lab||"",drs:a.drs||"",
-      hours:a.hours||"",visitDay:a.visitDay||"",visited:visitedCell(a),notes:a.notes||"",visits:visitsToString(parseVisits(a.visits))});
+      hours:a.hours||"",visitDay:a.visitDay||"",visited:visitedCell(a),notes:a.notes||"",visits:visitsToString(parseVisits(a.visits)),starterKit:a.starterKit||"",welcomeEmail:a.welcomeEmail||""});
   });
   return rows;
 }
@@ -1269,7 +1269,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41f";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41g";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
