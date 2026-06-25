@@ -645,7 +645,7 @@ function rowsToStore(rows){
       // treated as "no override" and ignored — a partial/garbled Sheet read can
       // never delete the base list this way. (This was the data-wipe bug.)
       if(visited==="deleted"){ if(ns.del.indexOf(idx)<0)ns.del.push(idx); return; }
-      if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!(r.visits&&String(r.visits).trim())&&visited.indexOf("inactive")<0) return;
+      if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!r.starterKit&&!r.welcomeEmail&&!(r.visits&&String(r.visits).trim())&&visited.indexOf("inactive")<0) return;
       ns.over[idx]={name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
         visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||""};
@@ -980,7 +980,7 @@ function rebuild(){
   DB=[];
   _lastFollowKey="";   // data changed -> let follow mode rebuild its markers once
   const delSet=new Set(store.del);
-  const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy"];
+  const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy","starterKit","welcomeEmail"];
   const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });
     // visits: a list of {date, color, note, rep}, newest first. Backward compatible:
     // may arrive as a pipe/comma-separated string from the Sheet, where each
