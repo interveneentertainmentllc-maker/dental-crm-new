@@ -1257,7 +1257,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41h";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41i";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1742,10 +1742,15 @@ function setOnboarding(id, field, on){
   if(id[0]==="s"){
     const idx=parseInt(id.slice(1),10);
     const o=officeById(id)||{};
-    const base=store.over[idx]||{name:o.name,addr:o.addr,city:o.city,zip:o.zip,lat:o.lat,lng:o.lng,
-      phone:o.phone,email:o.email,scanner:o.scanner,lab:o.lab,drs:o.drs,hours:o.hours,visitDay:o.visitDay,notes:o.notes,addedBy:o.addedBy};
+    // Base on a full copy of the office's current fields (existing override merged in),
+    // so toggling a flag never drops notes, visits, or other onboarding flags.
+    const existing=store.over[idx]||{};
+    const base={name:o.name,addr:o.addr,city:o.city,zip:o.zip,lat:o.lat,lng:o.lng,
+      phone:o.phone,email:o.email,scanner:o.scanner,lab:o.lab,drs:o.drs,hours:o.hours,
+      visitDay:o.visitDay,notes:o.notes,visits:o.visits,visited:o.visited,active:o.active,
+      starterKit:o.starterKit,welcomeEmail:o.welcomeEmail,addedBy:o.addedBy};
     const patch={}; patch[field]=val;
-    store.over[idx]=Object.assign({},base,patch);
+    store.over[idx]=Object.assign({},base,existing,patch);
   } else {
     const a=store.add.find(x=>x.id===id); if(a)a[field]=val;
   }
@@ -2454,8 +2459,12 @@ function quickNote(id){
     // {notes,visited,visits} would later serialize a BLANK name to the Sheet and
     // erase the office name on sync. Seeding from `o` keeps name/addr/city/coords.
     const base=store.over[idx]||{name:o.name,addr:o.addr,city:o.city,zip:o.zip,lat:o.lat,lng:o.lng,
-      phone:o.phone,email:o.email,scanner:o.scanner,lab:o.lab,drs:o.drs,hours:o.hours,visitDay:o.visitDay,addedBy:o.addedBy};
-    store.over[idx]=Object.assign({},base,{notes:newNotes,visited:true,visits:newVisits});
+      phone:o.phone,email:o.email,scanner:o.scanner,lab:o.lab,drs:o.drs,hours:o.hours,visitDay:o.visitDay,addedBy:o.addedBy,starterKit:o.starterKit,welcomeEmail:o.welcomeEmail};
+    // Preserve onboarding flags: take whatever is currently set (override or live office)
+    // so saving a note never clears a ticked Starter Kit / Welcome Email.
+    const keepKit=(base.starterKit!=null&&base.starterKit!=="")?base.starterKit:(o.starterKit||"");
+    const keepWel=(base.welcomeEmail!=null&&base.welcomeEmail!=="")?base.welcomeEmail:(o.welcomeEmail||"");
+    store.over[idx]=Object.assign({},base,{notes:newNotes,visited:true,visits:newVisits,starterKit:keepKit,welcomeEmail:keepWel});
   } else {
     const a=store.add.find(x=>x.id===id); if(a){ a.notes=newNotes; a.visited=true; a.visits=newVisits; }
   }
