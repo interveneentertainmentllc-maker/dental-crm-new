@@ -1257,7 +1257,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41i";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41j";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1731,7 +1731,7 @@ function wirePopup(e){
   if(note) note.onclick = function(){ quickNote(note.getAttribute('data-pop-note')); };
   const kit = el.querySelector('[data-pop-kit]');
   const wel = el.querySelector('[data-pop-welcome]');
-  if(kit) kit.onchange = function(){ setOnboarding(kit.getAttribute('data-pop-kit'),'starterKit',kit.checked); };
+  if(kit) kit.onchange = function(){ window._dbgTick='TICK kit='+kit.checked+' id='+kit.getAttribute('data-pop-kit'); setOnboarding(kit.getAttribute('data-pop-kit'),'starterKit',kit.checked); };
   if(wel) wel.onchange = function(){ setOnboarding(wel.getAttribute('data-pop-welcome'),'welcomeEmail',wel.checked); };
 }
 // Set an onboarding flag (starterKit / welcomeEmail) on an office and save. Used by
@@ -2470,6 +2470,13 @@ function quickNote(id){
   }
   save(true); rebuild(); render();
   routeCheckoff(id);
+  // DEBUG: what is the flag on the office right after the note save?
+  try{
+    const chk=officeById(id);
+    const ov=(id[0]==='s')?store.over[parseInt(id.slice(1),10)]:null;
+    window._dbgNote='NOTE saved. office.kit='+(chk?chk.starterKit:'?')+' override.kit='+(ov?ov.starterKit:'(no ov)')+' | lastTick='+(window._dbgTick||'none');
+    setTimeout(()=>{ try{ toast(window._dbgNote,true); }catch(e){} }, 600);
+  }catch(e){}
   // re-open this marker's popup with the freshly saved note
   if(clusterLayer){
     clusterLayer.eachLayer(m=>{ if(m._oid===id){ try{ clusterLayer.zoomToShowLayer(m,()=>m.openPopup()); }catch(e){ m.openPopup(); } } });
