@@ -1243,7 +1243,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41b";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41c";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1736,7 +1736,12 @@ function setOnboarding(id, field, on){
     const a=store.add.find(x=>x.id===id); if(a)a[field]=val;
   }
   save(true); rebuild();
-  toast(val?(field==='starterKit'?'Starter Kit flagged':'Welcome Email flagged'):'Cleared',true);
+  // TEMP DIAGNOSTIC: verify the flag actually persisted on the office after rebuild.
+  try{
+    const check=officeById(id);
+    const got=check?String(check[field]||"(blank)"):"(office not found)";
+    toast((got==='Yes'?'✓ saved: ':'✗ LOST: ')+field+'='+got,true);
+  }catch(e){ toast('diag err',true); }
 }
 function refreshMap(filtered){
   buildMap();
