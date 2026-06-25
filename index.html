@@ -721,7 +721,10 @@ async function cloudPull(){
             const lv=localOv[k];
             if(lv!=null && lv!=="" && (remoteOv[k]==null || remoteOv[k]==="")){ remoteOv[k]=lv; mergedAny=true; }
           });
-          if(mergedAny) carried++;
+          // NOTE: a merge-only fill does NOT increment `carried`. The value is kept
+          // locally and will reach the Sheet on the next real save. Counting it would
+          // fire a catch-up push every poll, rewriting the rep/Onboarding tabs each
+          // cycle (the "sheet reloading constantly" problem).
         });
         // local deletions the Sheet hasn't recorded yet
         (store.del||[]).forEach(idx=>{ if(ns.del.indexOf(idx)<0){ ns.del.push(idx); carried++; } });
@@ -1257,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41k";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41l";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
