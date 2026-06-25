@@ -705,9 +705,23 @@ async function cloudPull(){
         const localOnlyAdds=(store.add||[]).filter(a=>a&&a.id&&!incomingAddIds[a.id]);
         if(localOnlyAdds.length){ ns.add=(ns.add||[]).concat(localOnlyAdds); }
         let carried=localOnlyAdds.length;
-        // edited seed offices the Sheet didn't return as overrides
+        // edited seed offices: carry forward local overrides. If the Sheet has no
+        // override for this office, keep ours wholesale. If the Sheet DOES have one,
+        // still preserve any local field the Sheet's version left blank (e.g. an
+        // onboarding flag the rep just ticked that hasn't reached the Sheet yet) —
+        // otherwise the pull would wipe a freshly-set local value. The Sheet still
+        // wins for fields it has populated.
         Object.keys(store.over||{}).forEach(idx=>{
-          if(!(idx in ns.over) && ns.del.indexOf(parseInt(idx,10))<0){ ns.over[idx]=store.over[idx]; carried++; }
+          if(ns.del.indexOf(parseInt(idx,10))>=0) return;
+          const localOv=store.over[idx];
+          if(!(idx in ns.over)){ ns.over[idx]=localOv; carried++; return; }
+          const remoteOv=ns.over[idx];
+          let mergedAny=false;
+          Object.keys(localOv||{}).forEach(k=>{
+            const lv=localOv[k];
+            if(lv!=null && lv!=="" && (remoteOv[k]==null || remoteOv[k]==="")){ remoteOv[k]=lv; mergedAny=true; }
+          });
+          if(mergedAny) carried++;
         });
         // local deletions the Sheet hasn't recorded yet
         (store.del||[]).forEach(idx=>{ if(ns.del.indexOf(idx)<0){ ns.del.push(idx); carried++; } });
@@ -1243,7 +1257,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41c";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41d";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1736,12 +1750,7 @@ function setOnboarding(id, field, on){
     const a=store.add.find(x=>x.id===id); if(a)a[field]=val;
   }
   save(true); rebuild();
-  // TEMP DIAGNOSTIC: verify the flag actually persisted on the office after rebuild.
-  try{
-    const check=officeById(id);
-    const got=check?String(check[field]||"(blank)"):"(office not found)";
-    toast((got==='Yes'?'✓ saved: ':'✗ LOST: ')+field+'='+got,true);
-  }catch(e){ toast('diag err',true); }
+  toast(val?(field==='starterKit'?'Starter Kit flagged':'Welcome Email flagged'):'Cleared',true);
 }
 function refreshMap(filtered){
   buildMap();
