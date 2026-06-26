@@ -1260,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41n";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41o";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1488,6 +1488,28 @@ async function reverseGeocode(lat, lng){
   }catch(e){ return {}; }
 }
 let _dropMarker=null;
+let _previewTimer=null, _previewSeq=0;
+// Debounce: only look up after the pin pauses ~350ms, to respect the geocoder's
+// rate limit while still feeling live as you drag.
+function schedulePreview(lat,lng){
+  setDropMsg("Finding address…");
+  if(_previewTimer) clearTimeout(_previewTimer);
+  _previewTimer=setTimeout(()=>{ livePreviewAddr(lat,lng); }, 350);
+}
+function setDropMsg(txt){
+  if(_dropConfirmEl){ const m=_dropConfirmEl.querySelector('.dc-msg'); if(m) m.textContent=txt; }
+}
+async function livePreviewAddr(lat,lng){
+  const seq=++_previewSeq;   // ignore out-of-order responses from earlier positions
+  try{
+    const info=await reverseGeocode(lat,lng);
+    if(seq!==_previewSeq) return;   // a newer drag superseded this lookup
+    const addr=(info&&info.addr)?info.addr:"";
+    const city=(info&&info.city)?info.city:"";
+    if(addr){ setDropMsg("📍 "+addr+(city?(", "+city):"")); }
+    else { setDropMsg("No address here — try nearer the street"); }
+  }catch(e){ if(seq===_previewSeq) setDropMsg("Drag the pin onto the exact spot"); }
+}
 function dropPinAt(latlng){
   let lat=+latlng.lat.toFixed(6), lng=+latlng.lng.toFixed(6);
   // Drop a DRAGGABLE pin so the rep can nudge it exactly onto the building before
@@ -1495,7 +1517,12 @@ function dropPinAt(latlng){
   try{ if(_dropMarker) mapObj.removeLayer(_dropMarker); }catch(e){}
   try{
     _dropMarker=L.marker([lat,lng],{draggable:true,autoPan:true}).addTo(mapObj);
-    _dropMarker.on('dragend',()=>{ const p=_dropMarker.getLatLng(); lat=+p.lat.toFixed(6); lng=+p.lng.toFixed(6); });
+    _dropMarker.on('dragend',()=>{ const p=_dropMarker.getLatLng(); lat=+p.lat.toFixed(6); lng=+p.lng.toFixed(6); livePreviewAddr(lat,lng); });
+    // Live address preview: as the pin is dragged, debounce-lookup the address at the
+    // current spot and show it in the confirm bar, so the rep can stop where it resolves.
+    _dropMarker.on('drag',()=>{ const p=_dropMarker.getLatLng(); schedulePreview(+p.lat.toFixed(6),+p.lng.toFixed(6)); });
+    // Initial preview at the drop point.
+    livePreviewAddr(lat,lng);
   }catch(e){}
   if(navigator.vibrate){ try{navigator.vibrate(15);}catch(e){} }
   // Confirmation bar: drag to fine-tune, then confirm or cancel.
