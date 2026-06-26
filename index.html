@@ -1260,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41s";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41t";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1474,45 +1474,17 @@ function buildMap(){
 // Reverse-geocode a point to a street address via OpenStreetMap Nominatim (free,
 // no key). Returns {addr,city,zip} or {} on any failure — the pin still works
 // even if the lookup fails, since lat/lng are captured regardless.
-// Find the closest EXISTING office (with a real address) within `maxFeet` of a point.
-// Your own office data is real surveyed data, so we trust it over the OSM geocoder's
-// interpolated guesses. Returns the office or null.
-function nearestOffice(lat,lng,maxFeet){
-  if(typeof DB==="undefined"||!DB.length) return null;
-  let best=null, bestD=Infinity;
-  for(const o of DB){
-    if(!o.lat||!o.lng||!o.addr) continue;
-    const d=feetBetween(lat,lng,+o.lat,+o.lng);
-    if(d<maxFeet && d<bestD){ best=o; bestD=d; }
-  }
-  return best;
-}
-async function _revAt(lat,lng){
-  const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lng)+"&zoom=18&addressdetails=1";
-  const res=await fetch(url,{headers:{"Accept":"application/json"}});
-  if(!res.ok) return null;
-  const d=await res.json(); const a=d&&d.address?d.address:{};
-  const house=a.house_number||""; const road=a.road||"";
-  const addr=((house?house+" ":"")+road).trim();
-  const city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||"";
-  const zip=a.postcode||"";
-  // Reject INTERPOLATED results: Nominatim flags estimated points along a street range.
-  // Those have a plausible-looking number that may not be a real building, so we don't
-  // trust them. Only accept a genuine building/address match with a real house number.
-  const interpolated=(d&&(d.osm_type==="way"&&/interpolation/i.test(String(d.category||d.type||""))))
-    || (a&&a.house_number&&d&&/interpolation/i.test(String(d.addresstype||"")));
-  return {addr, road, house, city, zip, hasNum:!!house, interpolated:!!interpolated};
-}
 async function reverseGeocode(lat, lng){
   try{
-    // 1) Prefer a nearby EXISTING office's real address (trusted, surveyed data).
-    const near=nearestOffice(lat,lng,150);
-    if(near&&near.addr){ return {addr:near.addr, city:near.city||"", zip:near.zip||"", fromOffice:true, officeName:near.name}; }
-    // 2) Otherwise fall back to the map geocoder (may be interpolated/approximate).
-    const r=await _revAt(lat,lng);
-    if(r&&r.addr){ return {addr:r.addr, city:r.city, zip:r.zip}; }
-    if(r){ return {addr:"", city:r.city, zip:r.zip, road:r.road}; }
-    return {};
+    const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lng)+"&zoom=18&addressdetails=1";
+    const res=await fetch(url,{headers:{"Accept":"application/json"}});
+    if(!res.ok) return {};
+    const d=await res.json(); const a=d&&d.address?d.address:{};
+    const house=a.house_number||""; const road=a.road||"";
+    const addr=(house?house+" ":"")+road;
+    const city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||"";
+    const zip=a.postcode||"";
+    return {addr:addr.trim(), city:city, zip:zip};
   }catch(e){ return {}; }
 }
 let _dropMarker=null;
@@ -1529,19 +1501,13 @@ function setDropMsg(txt){
 }
 async function livePreviewAddr(lat,lng){
   const seq=++_previewSeq;   // ignore out-of-order responses from earlier positions
-  // 1) Prefer a nearby existing office's real address (instant, no network).
-  const near=nearestOffice(lat,lng,150);
-  if(near&&near.addr){ setDropMsg("📍 "+near.addr+(near.city?(", "+near.city):"")+" — existing: "+(near.name||"office")); return; }
   try{
-    const info=await _revAt(lat,lng);   // single cheap lookup while dragging
+    const info=await reverseGeocode(lat,lng);
     if(seq!==_previewSeq) return;   // a newer drag superseded this lookup
-    if(info && info.addr){
-      setDropMsg("📍 "+info.addr+(info.city?(", "+info.city):"")+"  (approx)");
-    } else if(info && info.road){
-      setDropMsg("On "+info.road+" — drag onto the building or type the number");
-    } else {
-      setDropMsg("No address here — nudge the pin or type it in");
-    }
+    const addr=(info&&info.addr)?info.addr:"";
+    const city=(info&&info.city)?info.city:"";
+    if(addr){ setDropMsg("📍 "+addr+(city?(", "+city):"")); }
+    else { setDropMsg("No address here — try nearer the street"); }
   }catch(e){ if(seq===_previewSeq) setDropMsg("Drag the pin onto the exact spot"); }
 }
 function dropPinAt(latlng){
