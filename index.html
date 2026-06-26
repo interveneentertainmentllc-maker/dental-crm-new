@@ -1260,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41q";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41r";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1492,13 +1492,13 @@ async function _revAt(lat,lng){
 }
 async function reverseGeocode(lat, lng){
   try{
-    // EXACT-ONLY: look up the precise point. Only return an address if it's a real,
-    // exact match with a house number that is NOT interpolated. No nearby-search, no
-    // guessed numbers — if the spot isn't a known address, return nothing and let the
-    // rep nudge the pin or type it in. Better empty than a made-up/neighbor address.
+    // Look up the precise point and accept what the geocoder gives — including
+    // interpolated street numbers — so it populates an address most of the time.
+    // (We do NOT search neighboring points, since that returns a different building's
+    // address.) Reps can edit anything that's slightly off; the geocoded upload later
+    // is the authoritative cleanup.
     const r=await _revAt(lat,lng);
-    if(r&&r.hasNum&&!r.interpolated){ return {addr:r.addr, city:r.city, zip:r.zip}; }
-    // Road known but no exact building number -> return city/zip context only, no fake number.
+    if(r&&r.addr){ return {addr:r.addr, city:r.city, zip:r.zip}; }
     if(r){ return {addr:"", city:r.city, zip:r.zip, road:r.road}; }
     return {};
   }catch(e){ return {}; }
@@ -1520,13 +1520,12 @@ async function livePreviewAddr(lat,lng){
   try{
     const info=await _revAt(lat,lng);   // single cheap lookup while dragging
     if(seq!==_previewSeq) return;   // a newer drag superseded this lookup
-    // Only show an address if it's a real, exact, non-interpolated building match.
-    if(info && info.hasNum && !info.interpolated){
+    if(info && info.addr){
       setDropMsg("📍 "+info.addr+(info.city?(", "+info.city):""));
     } else if(info && info.road){
-      setDropMsg("On "+info.road+" — no exact address here, nudge onto the building or type it");
+      setDropMsg("On "+info.road+" — drag onto the building or type the number");
     } else {
-      setDropMsg("No exact address here — nudge the pin or type it in");
+      setDropMsg("No address here — nudge the pin or type it in");
     }
   }catch(e){ if(seq===_previewSeq) setDropMsg("Drag the pin onto the exact spot"); }
 }
