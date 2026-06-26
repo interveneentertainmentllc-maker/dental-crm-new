@@ -1260,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41p";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41q";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1483,27 +1483,24 @@ async function _revAt(lat,lng){
   const addr=((house?house+" ":"")+road).trim();
   const city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||"";
   const zip=a.postcode||"";
-  return {addr, road, house, city, zip, hasNum:!!house};
+  // Reject INTERPOLATED results: Nominatim flags estimated points along a street range.
+  // Those have a plausible-looking number that may not be a real building, so we don't
+  // trust them. Only accept a genuine building/address match with a real house number.
+  const interpolated=(d&&(d.osm_type==="way"&&/interpolation/i.test(String(d.category||d.type||""))))
+    || (a&&a.house_number&&d&&/interpolation/i.test(String(d.addresstype||"")));
+  return {addr, road, house, city, zip, hasNum:!!house, interpolated:!!interpolated};
 }
 async function reverseGeocode(lat, lng){
   try{
-    // 1) Try the exact point first.
-    let best=await _revAt(lat,lng);
-    if(best&&best.hasNum) return {addr:best.addr, city:best.city, zip:best.zip};
-    // 2) No street number at the exact spot (e.g. dropped on a rooftop). Probe a small
-    //    ring of points around the pin (~25–45m out) and take the closest one that has
-    //    a real house number. ~0.0004 deg ≈ 45m. Keeps it to a handful of calls.
-    const ring=[
-      [0.00022,0],[ -0.00022,0],[0,0.00028],[0,-0.00028],
-      [0.0004,0],[-0.0004,0],[0,0.0005],[0,-0.0005]
-    ];
-    for(let i=0;i<ring.length;i++){
-      const r=await _revAt(lat+ring[i][0], lng+ring[i][1]);
-      if(r&&r.hasNum){ return {addr:r.addr, city:r.city, zip:r.zip}; }
-      if(r&&!best) best=r;   // keep a road-only fallback if nothing numbered turns up
-    }
-    // 3) Nothing numbered nearby — return the best road-level info we found (may be road only).
-    return best?{addr:best.addr, city:best.city, zip:best.zip}:{};
+    // EXACT-ONLY: look up the precise point. Only return an address if it's a real,
+    // exact match with a house number that is NOT interpolated. No nearby-search, no
+    // guessed numbers — if the spot isn't a known address, return nothing and let the
+    // rep nudge the pin or type it in. Better empty than a made-up/neighbor address.
+    const r=await _revAt(lat,lng);
+    if(r&&r.hasNum&&!r.interpolated){ return {addr:r.addr, city:r.city, zip:r.zip}; }
+    // Road known but no exact building number -> return city/zip context only, no fake number.
+    if(r){ return {addr:"", city:r.city, zip:r.zip, road:r.road}; }
+    return {};
   }catch(e){ return {}; }
 }
 let _dropMarker=null;
@@ -1521,12 +1518,16 @@ function setDropMsg(txt){
 async function livePreviewAddr(lat,lng){
   const seq=++_previewSeq;   // ignore out-of-order responses from earlier positions
   try{
-    const info=await _revAt(lat,lng);   // single cheap lookup while dragging (rate-limit friendly)
+    const info=await _revAt(lat,lng);   // single cheap lookup while dragging
     if(seq!==_previewSeq) return;   // a newer drag superseded this lookup
-    const addr=(info&&info.addr)?info.addr:"";
-    const city=(info&&info.city)?info.city:"";
-    if(addr){ setDropMsg("📍 "+addr+(city?(", "+city):"")); }
-    else { setDropMsg("No address here — try nearer the street"); }
+    // Only show an address if it's a real, exact, non-interpolated building match.
+    if(info && info.hasNum && !info.interpolated){
+      setDropMsg("📍 "+info.addr+(info.city?(", "+info.city):""));
+    } else if(info && info.road){
+      setDropMsg("On "+info.road+" — no exact address here, nudge onto the building or type it");
+    } else {
+      setDropMsg("No exact address here — nudge the pin or type it in");
+    }
   }catch(e){ if(seq===_previewSeq) setDropMsg("Drag the pin onto the exact spot"); }
 }
 function dropPinAt(latlng){
