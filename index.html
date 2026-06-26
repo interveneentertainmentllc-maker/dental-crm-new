@@ -1260,7 +1260,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41o";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41p";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -1474,17 +1474,36 @@ function buildMap(){
 // Reverse-geocode a point to a street address via OpenStreetMap Nominatim (free,
 // no key). Returns {addr,city,zip} or {} on any failure — the pin still works
 // even if the lookup fails, since lat/lng are captured regardless.
+async function _revAt(lat,lng){
+  const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lng)+"&zoom=18&addressdetails=1";
+  const res=await fetch(url,{headers:{"Accept":"application/json"}});
+  if(!res.ok) return null;
+  const d=await res.json(); const a=d&&d.address?d.address:{};
+  const house=a.house_number||""; const road=a.road||"";
+  const addr=((house?house+" ":"")+road).trim();
+  const city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||"";
+  const zip=a.postcode||"";
+  return {addr, road, house, city, zip, hasNum:!!house};
+}
 async function reverseGeocode(lat, lng){
   try{
-    const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lng)+"&zoom=18&addressdetails=1";
-    const res=await fetch(url,{headers:{"Accept":"application/json"}});
-    if(!res.ok) return {};
-    const d=await res.json(); const a=d&&d.address?d.address:{};
-    const house=a.house_number||""; const road=a.road||"";
-    const addr=(house?house+" ":"")+road;
-    const city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||"";
-    const zip=a.postcode||"";
-    return {addr:addr.trim(), city:city, zip:zip};
+    // 1) Try the exact point first.
+    let best=await _revAt(lat,lng);
+    if(best&&best.hasNum) return {addr:best.addr, city:best.city, zip:best.zip};
+    // 2) No street number at the exact spot (e.g. dropped on a rooftop). Probe a small
+    //    ring of points around the pin (~25–45m out) and take the closest one that has
+    //    a real house number. ~0.0004 deg ≈ 45m. Keeps it to a handful of calls.
+    const ring=[
+      [0.00022,0],[ -0.00022,0],[0,0.00028],[0,-0.00028],
+      [0.0004,0],[-0.0004,0],[0,0.0005],[0,-0.0005]
+    ];
+    for(let i=0;i<ring.length;i++){
+      const r=await _revAt(lat+ring[i][0], lng+ring[i][1]);
+      if(r&&r.hasNum){ return {addr:r.addr, city:r.city, zip:r.zip}; }
+      if(r&&!best) best=r;   // keep a road-only fallback if nothing numbered turns up
+    }
+    // 3) Nothing numbered nearby — return the best road-level info we found (may be road only).
+    return best?{addr:best.addr, city:best.city, zip:best.zip}:{};
   }catch(e){ return {}; }
 }
 let _dropMarker=null;
@@ -1502,7 +1521,7 @@ function setDropMsg(txt){
 async function livePreviewAddr(lat,lng){
   const seq=++_previewSeq;   // ignore out-of-order responses from earlier positions
   try{
-    const info=await reverseGeocode(lat,lng);
+    const info=await _revAt(lat,lng);   // single cheap lookup while dragging (rate-limit friendly)
     if(seq!==_previewSeq) return;   // a newer drag superseded this lookup
     const addr=(info&&info.addr)?info.addr:"";
     const city=(info&&info.city)?info.city:"";
