@@ -238,6 +238,9 @@ body.cal-view .fab{display:none;}
 .onbox{display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;}
 .onrow{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink);cursor:pointer;}
 .onrow input[type=checkbox]{width:20px;height:20px;accent-color:var(--teal-deep);flex:0 0 auto;}
+.onrow-pl{justify-content:space-between;gap:12px;}
+.pl-select{flex:1;max-width:220px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:9px;background:var(--surface);font-family:var(--sans);font-size:14px;color:var(--ink);}
+.pl-other{width:100%;margin-top:8px;padding:9px 11px;border:1px solid var(--line-strong);border-radius:9px;font-family:var(--sans);font-size:14px;box-sizing:border-box;}
 .popup-onbox{display:flex;flex-direction:column;gap:7px;margin:2px 0 8px;padding:8px 10px;background:var(--teal-wash);border-radius:9px;}
 .popup-onrow{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);cursor:pointer;}
 .popup-onrow input[type=checkbox]{width:17px;height:17px;accent-color:var(--teal-deep);flex:0 0 auto;}
@@ -600,7 +603,7 @@ function cloudInit(){
    spreadsheet. Column order must match SHEET_COLS. The app converts between
    these rows and the internal `store` {over, add, del}. A row whose "visited"
    cell is the word DELETED (or whose name is blank) marks a removed seed office. */
-const SHEET_COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail"];
+const SHEET_COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail","pricelist"];
 
 // Build the array-of-rows the Sheet should contain from the current store.
 function visitedCell(o){ // compound: "Yes" / "INACTIVE" / "Yes;INACTIVE" / ""
@@ -620,7 +623,7 @@ function storeToRows(){
     const F=(k,si)=>{ if(o[k]!=null&&o[k]!=="")return o[k]; if(live&&live[k]!=null&&live[k]!=="")return live[k]; if(seed&&seed[si]!=null&&seed[si]!=="")return seed[si]; return ""; };
     rows.push({id,name:F("name",0),addr:F("addr",1),city:F("city",2),zip:F("zip",3),lat:F("lat",4),lng:F("lng",5),
       phone:o.phone||"",email:o.email||"",scanner:o.scanner||"",lab:o.lab||"",drs:o.drs||"",hours:o.hours||"",
-      visitDay:o.visitDay||"",visited:visitedCell(o),notes:o.notes||"",visits:visitsToString(parseVisits(o.visits)),starterKit:o.starterKit||"",welcomeEmail:o.welcomeEmail||""});
+      visitDay:o.visitDay||"",visited:visitedCell(o),notes:o.notes||"",visits:visitsToString(parseVisits(o.visits)),starterKit:o.starterKit||"",welcomeEmail:o.welcomeEmail||"",pricelist:o.pricelist||""});
   });
   // deleted seed offices
   (store.del||[]).forEach(idx=>{ rows.push({id:"s"+idx,name:"",visited:"DELETED",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",visits:""}); });
@@ -628,7 +631,7 @@ function storeToRows(){
   (store.add||[]).forEach(a=>{
     rows.push({id:a.id||("c"+Math.random().toString(36).slice(2)),name:a.name||"",addr:a.addr||"",city:a.city||"",zip:a.zip||"",
       lat:a.lat||"",lng:a.lng||"",phone:a.phone||"",email:a.email||"",scanner:a.scanner||"",lab:a.lab||"",drs:a.drs||"",
-      hours:a.hours||"",visitDay:a.visitDay||"",visited:visitedCell(a),notes:a.notes||"",visits:visitsToString(parseVisits(a.visits)),starterKit:a.starterKit||"",welcomeEmail:a.welcomeEmail||""});
+      hours:a.hours||"",visitDay:a.visitDay||"",visited:visitedCell(a),notes:a.notes||"",visits:visitsToString(parseVisits(a.visits)),starterKit:a.starterKit||"",welcomeEmail:a.welcomeEmail||"",pricelist:a.pricelist||""});
   });
   return rows;
 }
@@ -648,7 +651,7 @@ function rowsToStore(rows){
       if(!r.name&&!r.notes&&!r.scanner&&!r.lab&&!r.visitDay&&!r.phone&&!r.email&&!r.drs&&!r.hours&&!r.starterKit&&!r.welcomeEmail&&!(r.visits&&String(r.visits).trim())&&visited.indexOf("inactive")<0) return;
       ns.over[idx]={name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
-        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||""};
+        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||"",pricelist:r.pricelist||""};
     } else {
       if(visited==="deleted") return; // a deleted custom office just disappears
       // De-duplicate added offices: skip if we've already taken this id,
@@ -659,7 +662,7 @@ function rowsToStore(rows){
       seenAddId[id]=1; if(key!=="||")seenAddKey[key]=1;
       ns.add.push({id,name:r.name||"",addr:r.addr||"",city:r.city||"",zip:r.zip||"",lat:r.lat||"",lng:r.lng||"",
         phone:r.phone||"",email:r.email||"",scanner:r.scanner||"",lab:r.lab||"",drs:r.drs||"",hours:r.hours||"",
-        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||"",seed:false});
+        visitDay:r.visitDay||"",visited:(visited.indexOf("yes")>=0||visited.indexOf("true")>=0||visited==="1"),active:(visited.indexOf("inactive")<0),notes:r.notes||"",visits:r.visits||"",starterKit:r.starterKit||"",welcomeEmail:r.welcomeEmail||"",pricelist:r.pricelist||"",seed:false});
     }
   });
   return ns;
@@ -997,7 +1000,7 @@ function rebuild(){
   DB=[];
   _lastFollowKey="";   // data changed -> let follow mode rebuild its markers once
   const delSet=new Set(store.del);
-  const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy","starterKit","welcomeEmail"];
+  const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy","starterKit","welcomeEmail","pricelist"];
   const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });
     // visits: a list of {date, color, note, rep}, newest first. Backward compatible:
     // may arrive as a pipe/comma-separated string from the Sheet, where each
@@ -1011,7 +1014,7 @@ function rebuild(){
   SEED.forEach((r,i)=>{
     if(delSet.has(i))return;
     const o={id:"s"+i,seed:true,name:r[0],addr:r[1],city:r[2],zip:r[3],lat:r[4],lng:r[5],county:r[6],
-             phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",starterKit:"",welcomeEmail:"",visited:false,active:true};
+             phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",starterKit:"",welcomeEmail:"",pricelist:"",visited:false,active:true};
     const ov=store.over[i];
     if(ov)Object.assign(o,ov);
     DB.push(norm(o));
@@ -1260,7 +1263,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41t";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41u";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -2271,7 +2274,7 @@ function openDetail(id){
 function openForm(id, prefill){
   if(mapObj){try{mapObj.closePopup();}catch(e){}}
   const isNew=!id;
-  const o=isNew?{name:"",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",starterKit:"",welcomeEmail:"",visits:[]}:officeById(id);
+  const o=isNew?{name:"",addr:"",city:"",zip:"",lat:"",lng:"",phone:"",email:"",scanner:"",lab:"",drs:"",hours:"",visitDay:"",notes:"",starterKit:"",welcomeEmail:"",pricelist:"",visits:[]}:officeById(id);
   if(isNew && prefill){ if(prefill.lat!=null)o.lat=prefill.lat; if(prefill.lng!=null)o.lng=prefill.lng;
     if(prefill.addr)o.addr=prefill.addr; if(prefill.city)o.city=prefill.city; if(prefill.zip)o.zip=prefill.zip; }
   document.getElementById('sheetTitle').textContent=isNew?"Add Office":"Edit Office";
@@ -2328,6 +2331,15 @@ function openForm(id, prefill){
       <div class="onbox">
         <label class="onrow"><input type="checkbox" id="f_starterkit" ${o.starterKit==='Yes'?'checked':''}> <span>Send Starter Kit</span></label>
         <label class="onrow"><input type="checkbox" id="f_welcomeemail" ${o.welcomeEmail==='Yes'?'checked':''}> <span>Send Welcome Email</span></label>
+        <div class="onrow onrow-pl">
+          <span>Pricelist</span>
+          <select id="f_pricelist" class="pl-select">
+            ${['Retail','Corporate','Volume','Heartland','MB2','Midwest','EDA','ADI'].map(v=>`<option value="${v}"${(o.pricelist===v)?' selected':''}>${v}</option>`).join('')}
+            <option value="Other"${(o.pricelist&&['Retail','Corporate','Volume','Heartland','MB2','Midwest','EDA','ADI',''].indexOf(o.pricelist)<0)?' selected':''}>Other</option>
+            <option value=""${(!o.pricelist)?' selected':''}>—</option>
+          </select>
+        </div>
+        <input type="text" id="f_pricelist_other" class="pl-other" placeholder="Type the pricelist name" value="${(o.pricelist&&['Retail','Corporate','Volume','Heartland','MB2','Midwest','EDA','ADI',''].indexOf(o.pricelist)<0)?String(o.pricelist).replace(/"/g,'&quot;'):''}" style="${(o.pricelist&&['Retail','Corporate','Volume','Heartland','MB2','Midwest','EDA','ADI',''].indexOf(o.pricelist)<0)?'':'display:none;'}">
       </div>
     </div>
     <div class="actions">
@@ -2345,7 +2357,15 @@ function openForm(id, prefill){
   if(scanwrap) scanwrap.querySelectorAll('[data-scan]').forEach(b=>{
     b.onclick=()=>{const v=b.getAttribute('data-scan');scan=(scan===v)?"":v;document.querySelectorAll('#f_scanwrap .scanopt').forEach(x=>x.classList.toggle('on',x.getAttribute('data-scan')===scan));};
   });
-  // Drop-pin: capture the rep's current GPS location into the lat/lng fields.
+  // Pricelist dropdown: show the free-text box only when "Other" is selected.
+  const plSel=document.getElementById('f_pricelist');
+  const plOther=document.getElementById('f_pricelist_other');
+  if(plSel&&plOther){
+    plSel.onchange=()=>{
+      if(plSel.value==='Other'){ plOther.style.display=''; plOther.focus(); }
+      else { plOther.style.display='none'; }
+    };
+  }
   const pinBtn=document.getElementById('f_pin');
   if(pinBtn) pinBtn.onclick=function(){
     const btn=this, st=document.getElementById('f_pinstatus');
@@ -2434,13 +2454,14 @@ function saveForm(id,getScan,getVisits,getActive){
     drs:g('f_drs'),hours:g('f_hours'),visitDay:g('f_visit'),notes:g('f_notes'),visits,
     starterKit:(document.getElementById('f_starterkit')&&document.getElementById('f_starterkit').checked)?'Yes':'',
     welcomeEmail:(document.getElementById('f_welcomeemail')&&document.getElementById('f_welcomeemail').checked)?'Yes':'',
+    pricelist:(function(){ const sel=document.getElementById('f_pricelist'); if(!sel)return ""; const v=sel.value; if(v==='Other'){ return g('f_pricelist_other'); } return v; })(),
     active:(getActive?getActive():true)};
   // AUTO-LOG A VISIT ON EDIT: if this is an existing office and the rep actually
   // changed a field (note, scanner, hours, etc. — or the visit list itself),
   // record a visit dated today (carrying the last status color), so they don't
   // have to tap "Log visit". One per day max (ensureVisitToday guards that).
   if(id && existing){
-    const fields=["name","addr","city","zip","phone","email","scanner","lab","drs","hours","visitDay","notes","starterKit","welcomeEmail"];
+    const fields=["name","addr","city","zip","phone","email","scanner","lab","drs","hours","visitDay","notes","starterKit","welcomeEmail","pricelist"];
     const fieldChanged=fields.some(k=>String((data[k]==null?"":data[k]))!==String((existing[k]==null?"":existing[k])));
     const visitsChanged=visitsToString(visits)!==visitsToString(parseVisits(existing.visits));
     if(fieldChanged||visitsChanged){
@@ -2726,7 +2747,7 @@ function openSync(){
     '// Set this to the address that should be emailed when a rep newly checks',
     '// "Send Starter Kit" or "Send Welcome Email" on an office. Leave "" to disable.',
     'var ADMIN_EMAIL="";   // <-- PUT YOUR EMAIL HERE, e.g. "you@example.com"',
-    'var COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail"];',
+    'var COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail","pricelist"];',
     'var LOG_COLS=["logId","office","city","date","status","note","rep","officeId"];',
     '// Shared secret. Must EXACTLY match GS_TOKEN in the app. Change BOTH together.',
     'var TOKEN="Nh08rwbEMdxBvJDy-D_LAMo1";',
@@ -2877,7 +2898,7 @@ function openSync(){
     '// full office info PLUS the per-office Starter Kit / Welcome Email status, so you',
     '// can fulfill kits/emails on the back end. Rebuilt fresh each sync. The master',
     '// VisitLog stays untouched as the backup.',
-    'var ONB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","starterKit","welcomeEmail"];',
+    'var ONB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","starterKit","welcomeEmail","pricelist"];',
     'function buildOnboardingTab_(){',
     '  var ss=SpreadsheetApp.getActiveSpreadsheet();',
     '  var lsh=logSheet_(); var last=lsh.getLastRow();',
@@ -2893,7 +2914,7 @@ function openSync(){
     '    var row=log[i]; var oid=String(row[liId]||"").trim(); var o=office[oid];',
     '    out.push([ row[liDate], row[liStatus], row[liNote], row[liRep], row[liOffice], row[liCity], oid,',
     '               col(o,"addr"), col(o,"zip"), col(o,"phone"), col(o,"email"), col(o,"scanner"),',
-    '               col(o,"starterKit"), col(o,"welcomeEmail") ]);',
+    '               col(o,"starterKit"), col(o,"welcomeEmail"), col(o,"pricelist") ]);',
     '  }',
     '  var sh=ss.getSheetByName("Onboarding");',
     '  if(!sh){ sh=ss.insertSheet("Onboarding"); }',
