@@ -1263,7 +1263,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41u";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41v";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -2925,7 +2925,7 @@ function openSync(){
     '// is one VISIT, enriched with the full office record (name, addr, phone, email,',
     '// scanner, lab, drs, hours, etc.) looked up from the offices sheet. Rebuilt fresh',
     '// each sync so notes/fields added later always appear.',
-    'var REPTAB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","lab","drs","hours","visitDay","officeNotes"];',
+    'var REPTAB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","lab","drs","hours","visitDay","officeNotes","pricelist"];',
     'function mirrorToRepTabs_(rows){',
     '  var ss=SpreadsheetApp.getActiveSpreadsheet();',
     '  var lsh=logSheet_();',
@@ -2952,7 +2952,7 @@ function openSync(){
     '              row[liOffice], row[liCity], oid,',
     '              col(o,"addr"), col(o,"zip"), col(o,"phone"), col(o,"email"),',
     '              col(o,"scanner"), col(o,"lab"), col(o,"drs"), col(o,"hours"),',
-    '              col(o,"visitDay"), col(o,"notes") ];',
+    '              col(o,"visitDay"), col(o,"notes"), col(o,"pricelist") ];',
     '    var safe=rep.replace(/[\\\\\\/\\?\\*\\[\\]:]/g,"").substring(0,80);',
     '    var tab="Visits - "+safe;',
     '    if(!byRep[tab]) byRep[tab]=[];',
