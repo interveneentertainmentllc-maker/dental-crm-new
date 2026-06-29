@@ -1263,7 +1263,7 @@ function renderInner(){
     sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=store.add.length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41v";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41w";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -2865,7 +2865,7 @@ function openSync(){
     'function notifyOnboarding_(list){',
     '  if(!ADMIN_EMAIL || !list || !list.length) return;',
     '  var ni=COLS.indexOf("name"), ai=COLS.indexOf("addr"), ci=COLS.indexOf("city"),',
-    '      ei=COLS.indexOf("email"), vi=COLS.indexOf("visits");',
+    '      ei=COLS.indexOf("email"), vi=COLS.indexOf("visits"), pli=COLS.indexOf("pricelist");',
     '  for(var i=0;i<list.length;i++){',
     '    var row=list[i].row;',
     '    var name=String(row[ni]||"(no name)");',
@@ -2884,6 +2884,8 @@ function openSync(){
     '    if(fullAddr) lines.push("Address: "+fullAddr);',
     '    lines.push("Requested: "+what.join(" and "));',
     '    if(rep) lines.push("Rep: "+rep);',
+    '    var pricelist=(pli>=0)?String(row[pli]||""):"";',
+    '    if(pricelist) lines.push("Pricelist: "+pricelist);',
     '    if(email) lines.push("Office email: "+email);',
     '    try{ MailApp.sendEmail(ADMIN_EMAIL, subject, lines.join("\\n")); }catch(mailErr){ /* never break sync over an email */ }',
     '  }',
