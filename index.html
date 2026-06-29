@@ -573,6 +573,35 @@ function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.se
 function isAdmin(){ return !!(ME&&ME.role==="admin"); }
 function meName(){ return ME?String(ME.name||"").replace(/\s+/g," ").trim():""; }
 function repTerritory(){ return ME?(ME.territory||""):""; }
+// Derive a US state (full name) from a ZIP code, using the standard 3-digit ZIP
+// prefix ranges. Returns "" if unknown. Used so reps can be scoped to their state.
+const ZIP_STATE_RANGES=[
+  [["005","005"],"New York"],[["006","009"],"Puerto Rico"],[["010","027"],"Massachusetts"],
+  [["028","029"],"Rhode Island"],[["030","038"],"New Hampshire"],[["039","049"],"Maine"],
+  [["050","059"],"Vermont"],[["060","069"],"Connecticut"],[["070","089"],"New Jersey"],
+  [["100","149"],"New York"],[["150","196"],"Pennsylvania"],[["197","199"],"Delaware"],
+  [["200","205"],"District of Columbia"],[["206","219"],"Maryland"],[["220","246"],"Virginia"],
+  [["247","268"],"West Virginia"],[["270","289"],"North Carolina"],[["290","299"],"South Carolina"],
+  [["300","319"],"Georgia"],[["320","349"],"Florida"],[["350","369"],"Alabama"],
+  [["370","385"],"Tennessee"],[["386","397"],"Mississippi"],[["398","399"],"Georgia"],
+  [["400","427"],"Kentucky"],[["430","459"],"Ohio"],[["460","479"],"Indiana"],
+  [["480","499"],"Michigan"],[["500","528"],"Iowa"],[["530","549"],"Wisconsin"],
+  [["550","567"],"Minnesota"],[["570","577"],"South Dakota"],[["580","588"],"North Dakota"],
+  [["590","599"],"Montana"],[["600","629"],"Illinois"],[["630","658"],"Missouri"],
+  [["660","679"],"Kansas"],[["680","693"],"Nebraska"],[["700","714"],"Louisiana"],
+  [["716","729"],"Arkansas"],[["730","749"],"Oklahoma"],[["750","799"],"Texas"],
+  [["800","816"],"Colorado"],[["820","831"],"Wyoming"],[["832","838"],"Idaho"],
+  [["840","847"],"Utah"],[["850","865"],"Arizona"],[["870","884"],"New Mexico"],
+  [["889","898"],"Nevada"],[["900","961"],"California"],[["967","968"],"Hawaii"],
+  [["970","979"],"Oregon"],[["980","994"],"Washington"],[["995","999"],"Alaska"]
+];
+function stateFromZip(zip){
+  const z=String(zip||"").replace(/[^0-9]/g,"");
+  if(z.length<3) return "";
+  const p=z.substring(0,3);
+  for(const [range,st] of ZIP_STATE_RANGES){ if(p>=range[0]&&p<=range[1]) return st; }
+  return "";
+}
 
 /* ---------- shared cloud sync (Google Sheets via Apps Script) ----------
    Paste your Apps Script web-app URL in Settings ▸ Team Sync to turn on
@@ -1002,6 +1031,8 @@ function rebuild(){
   const delSet=new Set(store.del);
   const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy","starterKit","welcomeEmail","pricelist"];
   const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });
+    // Derive the office's US state: use an explicit state field if present, else from zip.
+    if(!o.state||!String(o.state).trim()){ o.state=stateFromZip(o.zip); }
     // visits: a list of {date, color, note, rep}, newest first. Backward compatible:
     // may arrive as a pipe/comma-separated string from the Sheet, where each
     // visit is "YYYY-MM-DD" (old) or "YYYY-MM-DD~color~note~rep" (new). Or an array
@@ -1131,7 +1162,18 @@ function repPass(o){
   const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
   return !!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn));
 }
+// Territory gate: a non-admin rep only sees offices in their assigned state.
+// Admins (and reps with no territory set) see everything.
+function territoryPass(o){
+  if(isAdmin&&isAdmin())return true;
+  const terr=repTerritory();
+  if(!terr)return true;                       // no territory assigned -> see all
+  const os=String(o.state||"").trim();
+  if(!os)return true;                          // office state unknown -> don't hide it
+  return os.toLowerCase()===terr.toLowerCase();
+}
 function matchFilter(o){
+  if(!territoryPass(o))return false;
   if(!groupsPass(o))return false;
   if(!secondaryPass(o))return false;
   if(!repPass(o))return false;
@@ -1250,20 +1292,22 @@ function renderInner(){
   const visitedByRep=(o)=>!!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rf0));
   const addedByRep=(o)=>String(o.addedBy||"").replace(/\s+/g," ").toLowerCase().trim()===rf0;
   let tot,vis,sc,added,repName="";
+  // Territory-scope the stat base: a rep only counts offices in their state.
+  const scoped=DB.filter(territoryPass);
   if(rf0){
     repName=(REPS||[]).map(r=>r.name).find(n=>String(n).replace(/\s+/g," ").toLowerCase().trim()===rf0)||state.repFilter;
-    const theirVisited=DB.filter(visitedByRep);
-    tot=DB.length;
+    const theirVisited=scoped.filter(visitedByRep);
+    tot=scoped.length;
     vis=theirVisited.length;
     sc=theirVisited.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-    added=DB.filter(addedByRep).length;
+    added=scoped.filter(addedByRep).length;
   } else {
-    tot=DB.length;
-    vis=DB.filter(isVisited).length;
-    sc=DB.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
-    added=store.add.length;
+    tot=scoped.length;
+    vis=scoped.filter(isVisited).length;
+    sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
+    added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(DB.map(o=>o.city)).size+" cities · v41w";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v41x";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
