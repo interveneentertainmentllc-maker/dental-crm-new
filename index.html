@@ -1307,7 +1307,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v41x";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v41y";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -2461,7 +2461,7 @@ function openForm(id, prefill){
     // one entry per date: update existing date's color/note, else add.
     // Stamp the current rep so the team can see who logged each visit.
     const ex=visits.find(x=>x.date===v);
-    if(ex){ ex.color=pickColor||ex.color; if(note)ex.note=note; if(meName())ex.rep=meName(); toast("Updated visit on "+fmtDate(v)); }
+    if(ex){ ex.color=pickColor||ex.color; if(note)ex.note=note; if(!ex.rep&&meName())ex.rep=meName(); toast("Updated visit on "+fmtDate(v)); }
     else { visits.push({date:v,color:pickColor,note,rep:meName()}); toast("Visit logged"+(meName()?(" by "+meName()):"")+" — tap Save to keep it"); }
     visits.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
     pickColor=""; if(vcwrap) vcwrap.querySelectorAll('.vcolorbtn').forEach(x=>x.classList.remove('on'));
