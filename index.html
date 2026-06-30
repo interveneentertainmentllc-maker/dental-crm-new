@@ -1043,8 +1043,11 @@ function rebuild(){
     // of strings (old) or objects (already parsed).
     o.visits=parseVisits(o.visits);
     if(o.active===undefined)o.active=true;
-    // if we don't know who added it, fall back to whoever logged the earliest visit
-    if(!o.addedBy && o.visits.length){ const first=o.visits[o.visits.length-1]; if(first&&first.rep)o.addedBy=first.rep; }
+    // addedBy means a rep CREATED this office. Preloaded (seed) offices were never
+    // added by anyone. Clear any addedBy on a seed office (also undoes bad data the
+    // earlier bug wrote, which made every visited seed office count as "added").
+    if(o.seed){ o.addedBy=""; }
+    else if(!o.addedBy && o.visits.length){ const first=o.visits[o.visits.length-1]; if(first&&first.rep)o.addedBy=first.rep; }
     return o;};
   SEED.forEach((r,i)=>{
     if(delSet.has(i))return;
@@ -1313,7 +1316,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42a";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42b";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
