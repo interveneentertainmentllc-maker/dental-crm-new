@@ -1089,8 +1089,6 @@ function officeById(id){return DB.find(o=>o.id===id);}
 function isVisited(o){return !!(o.visited||o.visitDay||o.notes||(o.visits&&o.visits.length)||o.scanner&&o.scanner!=="None");}
 // Date helpers. Internally a visit date is "YYYY-MM-DD".
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
-// Current local clock time, e.g. "2:45 PM" — stamped on a visit when it's logged.
-function nowTime(){ try{ return new Date().toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }catch(e){ const d=new Date(); let h=d.getHours(),m=String(d.getMinutes()).padStart(2,'0'),ap=h>=12?'PM':'AM'; h=h%12||12; return h+':'+m+' '+ap; } }
 function normDate(s){ // accept YYYY-MM-DD, MM/DD/YYYY, or Date-ish; return YYYY-MM-DD or ""
   if(!s)return ""; s=String(s).trim();
   // validate real calendar ranges, not just the shape, so a bad hand-edit like
@@ -1120,11 +1118,11 @@ function parseVisits(v){
   else if(typeof v==="string") arr=v.split(/[|,]/).map(s=>s.trim()).filter(Boolean);
   const out=arr.map(item=>{
     if(item&&typeof item==="object"){ const d=normDate(item.date); if(!d)return null;
-      return {date:d, color:(item.color||""), note:(item.note||""), rep:(item.rep||""), time:(item.time||"")}; }
-    // string form: "date" or "date~color~note" or "date~color~note~rep" or "date~color~note~rep~time"
+      return {date:d, color:(item.color||""), note:(item.note||""), rep:(item.rep||"")}; }
+    // string form: "date" or "date~color~note" or "date~color~note~rep"
     const parts=String(item).split("~");
     const d=normDate(parts[0]); if(!d)return null;
-    return {date:d, color:(parts[1]||"").trim(), note:(parts[2]||"").trim(), rep:(parts[3]||"").trim(), time:(parts[4]||"").trim()};
+    return {date:d, color:(parts[1]||"").trim(), note:(parts[2]||"").trim(), rep:(parts[3]||"").trim()};
   }).filter(Boolean);
   // newest first by date
   out.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
@@ -1137,11 +1135,8 @@ function visitsToString(visits){
     // so strip them from free-text fields to avoid splitting a visit into pieces
     // (a comma in "call, then email" would otherwise truncate the note on read).
     const clean=s=>(s||"").replace(/[~|,]/g," ").replace(/\s+/g," ").trim();
-    const c=v.color||""; const n=clean(v.note); const r=clean(v.rep); const tm=clean(v.time);
-    if(!c&&!n&&!r&&!tm)return v.date;
-    // Full form includes time as a 5th ~field. We emit the full form whenever a time
-    // exists so the timestamp is preserved; older readers ignore extra ~fields safely.
-    if(tm) return v.date+"~"+c+"~"+n+"~"+r+"~"+tm;
+    const c=v.color||""; const n=clean(v.note); const r=clean(v.rep);
+    if(!c&&!n&&!r)return v.date;
     // emit a 4th ~field only when a rep is present, so older readers still cope
     return r ? (v.date+"~"+c+"~"+n+"~"+r) : (n ? (v.date+"~"+c+"~"+n) : (v.date+"~"+c));
   }).join(" | ");
@@ -1157,7 +1152,7 @@ function ensureVisitToday(visits, prevColor){
   const today=todayStr();
   visits=Array.isArray(visits)?visits.slice():[];
   if(visits.some(v=>v&&normDate(v.date)===today)) return visits;   // already logged today
-  visits.unshift({date:today, time:nowTime(), color:(prevColor||""), note:"", rep:meName()});
+  visits.unshift({date:today, color:(prevColor||""), note:"", rep:meName()});
   visits.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
   return visits;
 }
@@ -1352,7 +1347,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42f";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42e";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -2349,7 +2344,7 @@ function openDetail(id){
       <div class="dcard"><div class="dl">Active</div><div class="dv" style="color:${inactive?'var(--danger)':'var(--green)'}">${inactive?'Inactive':'Active'}</div></div>
     </div>
     ${(o.visits&&o.visits.length)?`<div class="dl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:6px;">Recent Visits</div>
-    <div class="visitlist">${o.visits.slice(0,8).map(v=>{const dot=v.color?`<span class="vdot" style="background:${VCOLORS[v.color]||'#ccc'}"></span>`:'';const note=v.note?`<span class="vnotetag">${esc(v.note)}</span>`:'';const rep=v.rep?`<span class="vnotetag" style="background:var(--teal-wash);color:var(--teal-deep);">${esc(v.rep)}</span>`:'';const tm=v.time?`<span style="color:var(--ink-faint);font-size:11px;margin-left:4px;">${esc(v.time)}</span>`:'';return `<div class="visititem"><span class="vleft">${dot}${esc(fmtDate(v.date))}${tm}${note}${rep}</span></div>`;}).join('')}</div>`:''}
+    <div class="visitlist">${o.visits.slice(0,8).map(v=>{const dot=v.color?`<span class="vdot" style="background:${VCOLORS[v.color]||'#ccc'}"></span>`:'';const note=v.note?`<span class="vnotetag">${esc(v.note)}</span>`:'';const rep=v.rep?`<span class="vnotetag" style="background:var(--teal-wash);color:var(--teal-deep);">${esc(v.rep)}</span>`:'';return `<div class="visititem"><span class="vleft">${dot}${esc(fmtDate(v.date))}${note}${rep}</span></div>`;}).join('')}</div>`:''}
     <div class="dl" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:6px;">Notes</div>
     <div class="notebox">${o.notes?esc(o.notes):'<span style="color:var(--ink-faint)">No notes yet.</span>'}</div>
     <div class="actions">
@@ -2509,7 +2504,7 @@ function openForm(id, prefill){
     // Stamp the current rep so the team can see who logged each visit.
     const ex=visits.find(x=>x.date===v);
     if(ex){ ex.color=pickColor||ex.color; if(note)ex.note=note; if(!ex.rep&&meName())ex.rep=meName(); toast("Updated visit on "+fmtDate(v)); }
-    else { visits.push({date:v,time:nowTime(),color:pickColor,note,rep:meName()}); toast("Visit logged"+(meName()?(" by "+meName()):"")+" — tap Save to keep it"); }
+    else { visits.push({date:v,color:pickColor,note,rep:meName()}); toast("Visit logged"+(meName()?(" by "+meName()):"")+" — tap Save to keep it"); }
     visits.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
     pickColor=""; if(vcwrap) vcwrap.querySelectorAll('.vcolorbtn').forEach(x=>x.classList.remove('on'));
     if(vnEl) vnEl.value="";
@@ -2538,7 +2533,7 @@ function saveForm(id,getScan,getVisits,getActive){
   }
   let visits=parseVisits(getVisits?getVisits():[]);
   // Auto-fill: a brand-new office implies a visit today if the rep didn't log one.
-  if(!id && !visits.length) visits=[{date:todayStr(),time:nowTime(),color:"",note:"",rep:meName()}];
+  if(!id && !visits.length) visits=[{date:todayStr(),color:"",note:"",rep:meName()}];
   const data={name,addr:g('f_addr'),city,zip:g('f_zip'),
     lat:parseFloat(g('f_lat'))||"",lng:parseFloat(g('f_lng'))||"",
     phone:g('f_phone'),email:g('f_email'),scanner:getScan(),lab:g('f_lab'),
@@ -2839,7 +2834,7 @@ function openSync(){
     '// "Send Starter Kit" or "Send Welcome Email" on an office. Leave "" to disable.',
     'var ADMIN_EMAIL="";   // <-- PUT YOUR EMAIL HERE, e.g. "you@example.com"',
     'var COLS=["id","name","addr","city","zip","lat","lng","phone","email","scanner","lab","drs","hours","visitDay","visited","notes","visits","starterKit","welcomeEmail","pricelist"];',
-    'var LOG_COLS=["logId","office","city","date","time","status","note","rep","officeId"];',
+    'var LOG_COLS=["logId","office","city","date","status","note","rep","officeId"];',
     '// Shared secret. Must EXACTLY match GS_TOKEN in the app. Change BOTH together.',
     'var TOKEN="Nh08rwbEMdxBvJDy-D_LAMo1";',
     'function authed_(e){ return e && e.parameter && String(e.parameter.k||"")===TOKEN; }',
@@ -2937,12 +2932,12 @@ function openSync(){
     '      var seg=parts[p].trim(); if(!seg) continue;',
     '      var f=seg.split("~");',
     '      var date=(f[0]||"").trim(); if(!date) continue;',
-    '      var color=(f[1]||"").trim(); var note=(f[2]||"").trim(); var rep=(f[3]||"").trim(); var vtime=(f[4]||"").trim();',
+    '      var color=(f[1]||"").trim(); var note=(f[2]||"").trim(); var rep=(f[3]||"").trim();',
     '      var logId=officeId+"|"+date;',
     '      if(have[logId]) continue;     // already logged this office+date',
     '      have[logId]=1;',
     '      var status=color==="green"?"Good":color==="yellow"?"Okay":color==="red"?"Poor":"";',
-    '      add.push([logId, officeName, city, date, vtime, status, note, rep, officeId]);',
+    '      add.push([logId, officeName, city, date, status, note, rep, officeId]);',
     '    }',
     '  }',
     '  if(add.length){ var start=lsh.getLastRow()+1; lsh.getRange(start,1,add.length,LOG_COLS.length).setValues(add); }',
@@ -2991,7 +2986,7 @@ function openSync(){
     '// full office info PLUS the per-office Starter Kit / Welcome Email status, so you',
     '// can fulfill kits/emails on the back end. Rebuilt fresh each sync. The master',
     '// VisitLog stays untouched as the backup.',
-    'var ONB_COLS=["date","time","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","starterKit","welcomeEmail","pricelist"];',
+    'var ONB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","starterKit","welcomeEmail","pricelist"];',
     'function buildOnboardingTab_(){',
     '  var ss=SpreadsheetApp.getActiveSpreadsheet();',
     '  var lsh=logSheet_(); var last=lsh.getLastRow();',
@@ -3000,12 +2995,12 @@ function openSync(){
     '  var osh=sheet_(); var oLast=osh.getLastRow(); var office={};',
     '  if(oLast>1){ var od=osh.getRange(2,1,oLast-1,COLS.length).getValues(); for(var r=0;r<od.length;r++){ office[String(od[r][0]).trim()]=od[r]; } }',
     '  function col(o,name){ var i=COLS.indexOf(name); return (o&&i>=0)?o[i]:""; }',
-    '  var liId=LOG_COLS.indexOf("officeId"), liDate=LOG_COLS.indexOf("date"), liTime=LOG_COLS.indexOf("time"), liStatus=LOG_COLS.indexOf("status"),',
+    '  var liId=LOG_COLS.indexOf("officeId"), liDate=LOG_COLS.indexOf("date"), liStatus=LOG_COLS.indexOf("status"),',
     '      liNote=LOG_COLS.indexOf("note"), liRep=LOG_COLS.indexOf("rep"), liOffice=LOG_COLS.indexOf("office"), liCity=LOG_COLS.indexOf("city");',
     '  var out=[];',
     '  for(var i=0;i<log.length;i++){',
     '    var row=log[i]; var oid=String(row[liId]||"").trim(); var o=office[oid];',
-    '    out.push([ row[liDate], row[liTime], row[liStatus], row[liNote], row[liRep], row[liOffice], row[liCity], oid,',
+    '    out.push([ row[liDate], row[liStatus], row[liNote], row[liRep], row[liOffice], row[liCity], oid,',
     '               col(o,"addr"), col(o,"zip"), col(o,"phone"), col(o,"email"), col(o,"scanner"),',
     '               col(o,"starterKit"), col(o,"welcomeEmail"), col(o,"pricelist") ]);',
     '  }',
@@ -3018,7 +3013,7 @@ function openSync(){
     '// is one VISIT, enriched with the full office record (name, addr, phone, email,',
     '// scanner, lab, drs, hours, etc.) looked up from the offices sheet. Rebuilt fresh',
     '// each sync so notes/fields added later always appear.',
-    'var REPTAB_COLS=["date","time","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","lab","drs","hours","visitDay","officeNotes","pricelist"];',
+    'var REPTAB_COLS=["date","status","note","rep","office","city","officeId","addr","zip","phone","email","scanner","lab","drs","hours","visitDay","officeNotes","pricelist"];',
     'function mirrorToRepTabs_(rows){',
     '  var ss=SpreadsheetApp.getActiveSpreadsheet();',
     '  var lsh=logSheet_();',
@@ -3032,7 +3027,7 @@ function openSync(){
     '    for(var r=0;r<od.length;r++){ office[String(od[r][0]).trim()]=od[r]; }',
     '  }',
     '  function col(o,name){ var i=COLS.indexOf(name); return (o&&i>=0)?o[i]:""; }',
-    '  var liId=LOG_COLS.indexOf("officeId"), liDate=LOG_COLS.indexOf("date"), liTime=LOG_COLS.indexOf("time"),',
+    '  var liId=LOG_COLS.indexOf("officeId"), liDate=LOG_COLS.indexOf("date"),',
     '      liStatus=LOG_COLS.indexOf("status"), liNote=LOG_COLS.indexOf("note"),',
     '      liRep=LOG_COLS.indexOf("rep"), liOffice=LOG_COLS.indexOf("office"), liCity=LOG_COLS.indexOf("city");',
     '  var byRep={};',
@@ -3041,7 +3036,7 @@ function openSync(){
     '    var rep=String(row[liRep]||"").trim(); if(!rep) continue;',
     '    var oid=String(row[liId]||"").trim();',
     '    var o=office[oid];',
-    '    var out=[ row[liDate], row[liTime], row[liStatus], row[liNote], rep,',
+    '    var out=[ row[liDate], row[liStatus], row[liNote], rep,',
     '              row[liOffice], row[liCity], oid,',
     '              col(o,"addr"), col(o,"zip"), col(o,"phone"), col(o,"email"),',
     '              col(o,"scanner"), col(o,"lab"), col(o,"drs"), col(o,"hours"),',
