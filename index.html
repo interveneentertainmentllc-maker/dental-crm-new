@@ -1287,8 +1287,10 @@ function renderInner(){
     } else { drawer.style.display="none"; drawer.innerHTML=""; drawer._sig=null; }
   }
   const filtered=DB.filter(matchFilter);
-  // stats — when a rep is selected (repFilter), show THAT rep's numbers; else team totals.
-  const rf0=String(state.repFilter||"").replace(/\s+/g," ").toLowerCase().trim();
+  // stats — show THAT rep's numbers when a rep is selected (repFilter) OR when this
+  // device is a non-admin rep (so on launch a rep sees their own stats, not team totals).
+  let rf0=String(state.repFilter||"").replace(/\s+/g," ").toLowerCase().trim();
+  if(!rf0 && ME && !(isAdmin&&isAdmin())){ rf0=String(ME.name||"").replace(/\s+/g," ").toLowerCase().trim(); }
   const visitedByRep=(o)=>!!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rf0));
   const addedByRep=(o)=>String(o.addedBy||"").replace(/\s+/g," ").toLowerCase().trim()===rf0;
   let tot,vis,sc,added,repName="";
@@ -1307,7 +1309,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v41y";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v41z";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
