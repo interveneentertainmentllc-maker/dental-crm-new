@@ -577,6 +577,24 @@ function setMe(id){ const r=repById(id); if(!r)return; ME=r; try{localStorage.se
 function isAdmin(){ return !!(ME&&ME.role==="admin"); }
 function meName(){ return ME?String(ME.name||"").replace(/\s+/g," ").trim():""; }
 function repTerritory(){ return ME?(ME.territory||""):""; }
+// LOCATION-BASED scoping: the rep sees offices for the state they're physically in.
+// We detect that state from GPS (reverse-geocoded once, re-checked when they move far)
+// and cache it here. Falls back to assigned territory until a fix is available.
+let currentGeoState="";        // full state name detected from GPS, e.g. "Illinois"
+let _geoStateAt=null;          // {lat,lng} where we last detected, to avoid re-querying
+async function detectGeoState(lat,lng,force){
+  if(lat==null||lng==null) return;
+  // Skip if we already detected near here (within ~15 miles) unless forced.
+  if(!force && _geoStateAt && haversine(lat,lng,_geoStateAt.lat,_geoStateAt.lng)<15 && currentGeoState) return;
+  try{
+    const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lng)+"&zoom=8&addressdetails=1";
+    const res=await fetch(url,{headers:{"Accept":"application/json"}});
+    if(!res.ok) return;
+    const d=await res.json(); const a=d&&d.address?d.address:{};
+    const st=a.state||"";
+    if(st){ const prev=currentGeoState; currentGeoState=st; _geoStateAt={lat,lng}; if(prev!==st){ try{render();}catch(e){} } }
+  }catch(e){ /* keep whatever we had */ }
+}
 // Derive a US state (full name) from a ZIP code, using the standard 3-digit ZIP
 // prefix ranges. Returns "" if unknown. Used so reps can be scoped to their state.
 const ZIP_STATE_RANGES=[
@@ -1035,8 +1053,14 @@ function rebuild(){
   const delSet=new Set(store.del);
   const TXT=["name","addr","city","zip","county","phone","email","scanner","lab","drs","hours","visitDay","notes","addedBy","starterKit","welcomeEmail","pricelist"];
   const norm=o=>{TXT.forEach(k=>{ if(o[k]==null)o[k]=""; else if(typeof o[k]!=="string")o[k]=String(o[k]); });
-    // Derive the office's US state: use an explicit state field if present, else from zip.
+    // Derive the office's US state: explicit state field, else from zip.
     if(!o.state||!String(o.state).trim()){ o.state=stateFromZip(o.zip); }
+    // Safety fallback: your existing book is all Illinois, and some offices have
+    // missing/odd zips that don't resolve. Default any still-unknown state to Illinois
+    // so nothing in the current book gets hidden from IL reps (this is especially
+    // important for offices Jason has already visited). Nationwide offices loaded later
+    // with proper zips/state resolve to their real state and never hit this fallback.
+    if(!o.state||!String(o.state).trim()){ o.state="Illinois"; }
     // visits: a list of {date, color, note, rep}, newest first. Backward compatible:
     // may arrive as a pipe/comma-separated string from the Sheet, where each
     // visit is "YYYY-MM-DD" (old) or "YYYY-MM-DD~color~note~rep" (new). Or an array
@@ -1169,15 +1193,16 @@ function repPass(o){
   const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
   return !!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn));
 }
-// Territory gate: a non-admin rep only sees offices in their assigned state.
-// Admins (and reps with no territory set) see everything.
+// Location-based territory gate: a non-admin rep sees offices in the state they're
+// physically in (from GPS). Until a GPS state is known, fall back to their assigned
+// territory; if neither is known, show everything rather than hide their whole book.
 function territoryPass(o){
   if(isAdmin&&isAdmin())return true;
-  const terr=repTerritory();
-  if(!terr)return true;                       // no territory assigned -> see all
+  const activeState=currentGeoState||repTerritory();
+  if(!activeState)return true;                 // no location or territory yet -> see all
   const os=String(o.state||"").trim();
-  if(!os)return true;                          // office state unknown -> don't hide it
-  return os.toLowerCase()===terr.toLowerCase();
+  if(!os)return false;                          // unknown-state office: not in any state view
+  return os.toLowerCase()===activeState.toLowerCase();
 }
 function matchFilter(o){
   if(!territoryPass(o))return false;
@@ -1316,7 +1341,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42b";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42d";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -2056,6 +2081,8 @@ function startFollow(){
     btn.classList.remove('locating');
     lastFixAt=Date.now();
     userPos={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy};
+    // Keep the location-based office scoping in sync with where the rep actually is.
+    try{ detectGeoState(userPos.lat,userPos.lng); }catch(e){}
     if(firstFix){
       firstFix=false; userMovedMap=false;
       // On the FIRST lock only, snap to a tight neighborhood zoom centered on you.
@@ -3305,6 +3332,15 @@ window.openDetail=openDetail; window.quickNote=quickNote; window.openForm=openFo
 (async function init(){
   load();
   loadReps(); loadMe();           // rep registry + this device's identity
+  // For non-admin reps, detect their current state from GPS once on load so the
+  // location-based office scoping is ready without needing to start Follow mode.
+  try{
+    if(ME && !(isAdmin&&isAdmin()) && navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        p=>{ try{ detectGeoState(p.coords.latitude,p.coords.longitude,true); }catch(e){} },
+        ()=>{}, {enableHighAccuracy:false,timeout:12000,maximumAge:300000});
+    }
+  }catch(e){}
   cloudInit();
   setSyncBadge();                 // reflect saved sync state immediately
 
