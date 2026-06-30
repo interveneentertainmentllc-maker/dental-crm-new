@@ -553,7 +553,7 @@ const SCANNERS=["iTero","Trios","Dscore","Medit","Allied Star","Other","None"];
 const REPS_KEY="ildental_reps";   // rep registry
 const ME_KEY="ildental_me";       // which rep THIS device is, chosen once
 const DEFAULT_REPS=[
-  {id:"ryan", name:"Ryan", role:"admin", territory:"Illinois"},
+  {id:"ryan", name:"Ryan", role:"admin", territory:"Illinois", pin:"2468"},
   {id:"jason", name:"Jason", role:"rep", territory:"Illinois"}
 ];
 let REPS=[];        // the live registry
@@ -561,6 +561,10 @@ let ME=null;        // {id,name,role,territory} for this device, or null until c
 function loadReps(){
   try{const r=JSON.parse(localStorage.getItem(REPS_KEY)||"null"); REPS=Array.isArray(r)&&r.length?r:DEFAULT_REPS.slice();}
   catch(e){ REPS=DEFAULT_REPS.slice(); }
+  // Ensure any admin account has a PIN (older saved data may predate the PIN lock).
+  let changed=false;
+  REPS.forEach(r=>{ if(r.role==="admin" && (!r.pin||!String(r.pin).trim())){ r.pin="2468"; changed=true; } });
+  if(changed) saveReps();
 }
 function saveReps(){ try{localStorage.setItem(REPS_KEY,JSON.stringify(REPS));}catch(e){} }
 function repById(id){ return REPS.find(r=>r.id===id)||null; }
@@ -1309,7 +1313,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v41z";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42a";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
@@ -3120,17 +3124,25 @@ function openWhoAmI(){
       Pick who's using this device. Your visits and added offices get stamped with your name so the team can see who did what. You can switch anytime in Team settings. (This identifies you on this device — it isn't a password.)
     </div>
     ${opts}
-    ${(isAdmin()||!ME)?`<button class="btn btn-ghost" id="wai_manage" style="width:100%;margin-top:8px;">Manage reps</button>`:''}`;
+    ${isAdmin()?`<button class="btn btn-ghost" id="wai_manage" style="width:100%;margin-top:8px;">Manage reps</button>`:''}`;
   REPS.forEach(r=>{
     const b=document.querySelector('[data-me="'+r.id+'"]');
-    if(b) b.onclick=()=>{ setMe(r.id); updateMeBadge(); rebuild(); render(); hideSheet(); toast("You're set as "+r.name); };
+    if(b) b.onclick=()=>{
+      // Admin accounts are PIN-protected: a rep can't switch into admin without it.
+      if(r.role==="admin" && r.pin && !(ME&&ME.id===r.id)){
+        const entry=prompt("Enter the admin PIN to use "+r.name+":");
+        if(entry===null) return;                 // cancelled
+        if(String(entry).trim()!==String(r.pin).trim()){ toast("Incorrect PIN"); return; }
+      }
+      setMe(r.id); updateMeBadge(); rebuild(); render(); hideSheet(); toast("You're set as "+r.name);
+    };
   });
   const mng=document.getElementById('wai_manage');
   if(mng) mng.onclick=openManageReps;
   showSheet();
 }
 function openManageReps(){
-  if(!isAdmin() && ME){ toast("Only an admin can manage reps"); return; }
+  if(!isAdmin()){ toast("Only an admin can manage reps"); return; }
   document.getElementById('sheetTitle').textContent="Manage Reps";
   const rows=REPS.map(r=>`<div class="dcard full" style="display:flex;align-items:center;gap:10px;">
       <div style="flex:1;"><div class="dv">${esc(r.name)}${r.role==="admin"?' · Admin':''}</div><div class="dl">${esc(r.territory||'No territory')}</div></div>
@@ -3148,11 +3160,25 @@ function openManageReps(){
     <div class="actions">
       <button class="btn btn-ghost" id="nr_back">Back</button>
       <button class="btn btn-primary" id="nr_add">Add rep</button>
-    </div>`;
+    </div>
+    <div class="dl" style="margin:18px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);">Security</div>
+    <button class="btn btn-ghost" id="nr_pin" style="width:100%;">Change admin PIN</button>`;
   REPS.forEach(r=>{ const b=document.querySelector('[data-delrep="'+r.id+'"]');
     if(b) b.onclick=()=>{ if(!confirm("Remove "+r.name+"? Their past visits stay stamped with their name."))return;
       REPS=REPS.filter(x=>x.id!==r.id); saveReps(); if(ME&&ME.id===r.id){ME=null;try{localStorage.removeItem(ME_KEY);}catch(e){}} updateMeBadge(); openManageReps(); }; });
   const back=document.getElementById('nr_back'); if(back) back.onclick=openWhoAmI;
+  const pinBtn=document.getElementById('nr_pin');
+  if(pinBtn) pinBtn.onclick=()=>{
+    const me=REPS.find(r=>r.role==="admin");
+    if(!me){ toast("No admin account"); return; }
+    const cur=prompt("Enter the CURRENT admin PIN:");
+    if(cur===null) return;
+    if(String(cur).trim()!==String(me.pin||"").trim()){ toast("Incorrect PIN"); return; }
+    const np=prompt("Enter a NEW admin PIN (4+ digits):");
+    if(np===null) return;
+    if(!/^\d{4,}$/.test(String(np).trim())){ toast("PIN must be at least 4 digits"); return; }
+    me.pin=String(np).trim(); saveReps(); toast("Admin PIN updated");
+  };
   const add=document.getElementById('nr_add'); if(add) add.onclick=()=>{
     const name=((document.getElementById('nr_name')||{}).value||"").trim();
     if(!name){toast("Enter a name");return;}
@@ -3160,7 +3186,14 @@ function openManageReps(){
     const terr=((document.getElementById('nr_terr')||{}).value||"").trim();
     const role=((document.getElementById('nr_role')||{}).value||"rep");
     const id=name.toLowerCase().replace(/[^a-z0-9]+/g,"")+Math.random().toString(36).slice(2,5);
-    REPS.push({id,name,role,territory:terr}); saveReps(); openManageReps(); toast("Added "+name);
+    const newRep={id,name,role,territory:terr};
+    if(role==="admin"){
+      const np=prompt("Set a PIN for this admin account (4+ digits):");
+      if(np===null) return;
+      if(!/^\d{4,}$/.test(String(np).trim())){ toast("Admin needs a 4+ digit PIN"); return; }
+      newRep.pin=String(np).trim();
+    }
+    REPS.push(newRep); saveReps(); openManageReps(); toast("Added "+name);
   };
   showSheet();
 }
