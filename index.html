@@ -1193,11 +1193,17 @@ function repPass(o){
   const rn=state.repFilter.replace(/\s+/g," ").toLowerCase().trim();
   return !!(o.visits&&o.visits.some(v=>String(v.rep||"").replace(/\s+/g," ").toLowerCase().trim()===rn));
 }
-// Location-based territory gate: a non-admin rep sees offices in the state they're
-// physically in (from GPS). Until a GPS state is known, fall back to their assigned
-// territory; if neither is known, show everything rather than hide their whole book.
+// Location-based territory gate with a border cushion. A non-admin rep sees offices
+// in the state they're physically in (from GPS), PLUS any office within BORDER_MILES
+// of their current position regardless of state line — so accounts near a border (or
+// in a metro that straddles two states) stay visible when they cross.
+const BORDER_MILES=30;
 function territoryPass(o){
   if(isAdmin&&isAdmin())return true;
+  // Border cushion: always show offices physically near the rep, any state.
+  if(userPos && o.lat && o.lng){
+    if(haversine(userPos.lat,userPos.lng,+o.lat,+o.lng)<=BORDER_MILES) return true;
+  }
   const activeState=currentGeoState||repTerritory();
   if(!activeState)return true;                 // no location or territory yet -> see all
   const os=String(o.state||"").trim();
@@ -1341,7 +1347,7 @@ function renderInner(){
     sc=scoped.filter(o=>o.scanner&&o.scanner!=="None"&&o.scanner!=="").length;
     added=scoped.filter(o=>!o.seed).length;
   }
-  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42d";
+  document.getElementById('subline').textContent=tot.toLocaleString()+" offices · "+new Set(scoped.map(o=>o.city)).size+" cities · v42e";
   document.getElementById('statbar').innerHTML=
     `<div class="stat"><div class="sv">${tot.toLocaleString()}</div><div class="sl">Offices</div></div>
      <div class="stat v"><div class="sv">${vis}</div><div class="sl">${repName?esc(repName.split(" ")[0])+" visited":"Visited"}</div></div>
